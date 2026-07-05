@@ -104,13 +104,30 @@ hence the `>` redirect.
 python3 src/align.py output/book_pages.json output/full_transcript.json 4 > output/comments.json
 ```
 
-### Clipping audio (optional)
+### Clipping input files (optional)
 
-If you only want to test on part of a long recording:
+Useful for testing on a slice of a long recording or book instead of the
+whole thing.
+
+**Audio, by time range:**
 ```bash
 ffmpeg -y -i data/full_session.ogg -ss 00:13:39 -to 00:16:00 -c copy data/clip.ogg
 ```
 `-ss` / `-to` are `HH:MM:SS`; `-c copy` avoids re-encoding.
+
+**PDF, by page range** (via `pymupdf`, already a dependency — page numbers
+are 1-indexed, inclusive, matching `extract_book.py`'s `page_number`):
+```bash
+python3 -c "
+import fitz
+doc = fitz.open('data/hosn_thann_billah.pdf')
+out = fitz.open()
+out.insert_pdf(doc, from_page=3, to_page=5)  # pages 4-6 (0-indexed range)
+out.save('data/hosn_thann_billah_p4-6.pdf')
+"
+```
+Adjust `from_page`/`to_page` (0-indexed: subtract 1 from the page numbers
+you want) and the file names.
 
 ## Option B: the UI
 
