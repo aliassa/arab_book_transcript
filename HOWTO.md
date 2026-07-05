@@ -6,9 +6,19 @@ book extraction (OCR/direct text) -> transcription (faster-whisper) ->
 alignment (diff transcript against book text, comments = the parts that
 don't match).
 
-Two ways to run it: the command line (`extract_book.py`, `transcribe.py`,
-`align.py`) or a Streamlit UI (`app.py`) that wraps the same functions.
-Pick whichever is more convenient — output is identical either way.
+Two ways to run it: the command line (`src/extract_book.py`,
+`src/transcribe.py`, `src/align.py`) or a Streamlit UI (`src/app.py`) that
+wraps the same functions. Pick whichever is more convenient — output is
+identical either way.
+
+## Layout
+
+```
+src/      pipeline code + the Streamlit app
+data/     book PDFs and session audio (gitignored -- your local input files)
+output/   transcripts, extracted book text, comments (gitignored -- generated)
+docs/     background/planning notes
+```
 
 ## Prerequisites
 
@@ -48,19 +58,19 @@ optional output path.
 
 ### 1. Extract book text
 ```bash
-python3 extract_book.py <book.pdf> [output.json]
+python3 src/extract_book.py <book.pdf> [output.json]
 ```
 Per page: tries direct text extraction, scores its quality (fraction of
 plausible Arabic characters), and falls back to OCR if the score is below
 0.6. Output JSON is a list of `{page_number, text, method, quality}`.
 
 ```bash
-python3 extract_book.py hosn_thann_billah.pdf book_pages.json
+python3 src/extract_book.py data/hosn_thann_billah.pdf output/book_pages.json
 ```
 
 ### 2. Transcribe audio
 ```bash
-python3 transcribe.py <audio_file> [output.json]
+python3 src/transcribe.py <audio_file> [output.json]
 ```
 Runs faster-whisper (`large-v3`, Arabic, word-level timestamps, VAD on).
 **First run downloads the ~3GB model from Hugging Face** — needs internet
@@ -68,12 +78,12 @@ once, then it's cached locally. On this machine (CPU only, no GPU), expect
 roughly real-time-or-slower: a ~1hr session can take a couple of hours.
 Run long ones in the background:
 ```bash
-nohup python3 transcribe.py full_session.ogg full_transcript.json &
+nohup python3 src/transcribe.py data/full_session.ogg output/full_transcript.json &
 ```
 
 ### 3. Align and extract comments
 ```bash
-python3 align.py <book_pages.json> <transcript.json> [page_number] > comments.json
+python3 src/align.py <book_pages.json> <transcript.json> [page_number] > comments.json
 ```
 Diffs the transcript's word sequence against the book's (book = reference).
 Runs of transcript words with no match in the book, at least 5 words long,
@@ -82,14 +92,14 @@ one page; omit it to diff against the whole book. Prints a human-readable
 summary to stderr and the JSON array to stdout — hence the `>` redirect.
 
 ```bash
-python3 align.py book_pages.json full_transcript.json 4 > comments.json
+python3 src/align.py output/book_pages.json output/full_transcript.json 4 > output/comments.json
 ```
 
 ### Clipping audio (optional)
 
 If you only want to test on part of a long recording:
 ```bash
-ffmpeg -y -i full_session.ogg -ss 00:13:39 -to 00:16:00 -c copy clip.ogg
+ffmpeg -y -i data/full_session.ogg -ss 00:13:39 -to 00:16:00 -c copy data/clip.ogg
 ```
 `-ss` / `-to` are `HH:MM:SS`; `-c copy` avoids re-encoding.
 
@@ -97,7 +107,7 @@ ffmpeg -y -i full_session.ogg -ss 00:13:39 -to 00:16:00 -c copy clip.ogg
 
 ```bash
 source .venv/bin/activate
-streamlit run app.py
+streamlit run src/app.py
 ```
 Opens at `http://localhost:8501`. Then:
 
