@@ -1,0 +1,1473 @@
+{
+  "audio_path": "sample_audio_2.ogg",
+  "language": "ar",
+  "language_probability": 1,
+  "duration": 140.994,
+  "segments": [
+    {
+      "start": 1.1,
+      "end": 5.58,
+      "text": "الله سبحانه وتعالى خالقنا ورازقنا وحبيبنا",
+      "words": [
+        {
+          "word": " الله",
+          "start": 1.1,
+          "end": 1.6,
+          "probability": 0.958
+        },
+        {
+          "word": " سبحانه",
+          "start": 1.6,
+          "end": 2.24,
+          "probability": 0.996
+        },
+        {
+          "word": " وتعالى",
+          "start": 2.24,
+          "end": 2.86,
+          "probability": 0.997
+        },
+        {
+          "word": " خالقنا",
+          "start": 2.86,
+          "end": 3.92,
+          "probability": 0.984
+        },
+        {
+          "word": " ورازقنا",
+          "start": 3.92,
+          "end": 4.76,
+          "probability": 0.998
+        },
+        {
+          "word": " وحبيبنا",
+          "start": 4.76,
+          "end": 5.58,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 5.58,
+      "end": 8.08,
+      "text": "وسعت رحمته كل شيء",
+      "words": [
+        {
+          "word": " وسعت",
+          "start": 5.58,
+          "end": 6.76,
+          "probability": 0.739
+        },
+        {
+          "word": " رحمته",
+          "start": 6.76,
+          "end": 7.32,
+          "probability": 0.999
+        },
+        {
+          "word": " كل",
+          "start": 7.32,
+          "end": 7.6,
+          "probability": 0.999
+        },
+        {
+          "word": " شيء",
+          "start": 7.6,
+          "end": 8.08,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 8.46,
+      "end": 12.84,
+      "text": "خلق عباده ليعبدوه ليطيعوه ويحبوه",
+      "words": [
+        {
+          "word": " خلق",
+          "start": 8.46,
+          "end": 9.16,
+          "probability": 0.991
+        },
+        {
+          "word": " عباده",
+          "start": 9.16,
+          "end": 9.76,
+          "probability": 1.0
+        },
+        {
+          "word": " ليعبدوه",
+          "start": 9.76,
+          "end": 10.74,
+          "probability": 0.999
+        },
+        {
+          "word": " ليطيعوه",
+          "start": 10.74,
+          "end": 11.96,
+          "probability": 0.999
+        },
+        {
+          "word": " ويحبوه",
+          "start": 11.96,
+          "end": 12.84,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 12.84,
+      "end": 17.4,
+      "text": "خلقهم وتودد إليهم بالعطايا والنعم",
+      "words": [
+        {
+          "word": " خلقهم",
+          "start": 12.84,
+          "end": 14.08,
+          "probability": 0.999
+        },
+        {
+          "word": " وتودد",
+          "start": 14.08,
+          "end": 15.4,
+          "probability": 0.996
+        },
+        {
+          "word": " إليهم",
+          "start": 15.4,
+          "end": 15.94,
+          "probability": 0.998
+        },
+        {
+          "word": " بالعطايا",
+          "start": 15.94,
+          "end": 16.76,
+          "probability": 0.999
+        },
+        {
+          "word": " والنعم",
+          "start": 16.76,
+          "end": 17.4,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 17.4,
+      "end": 19.72,
+      "text": "فهو الودود سبحانه",
+      "words": [
+        {
+          "word": " فهو",
+          "start": 17.4,
+          "end": 18.38,
+          "probability": 1.0
+        },
+        {
+          "word": " الودود",
+          "start": 18.38,
+          "end": 18.84,
+          "probability": 1.0
+        },
+        {
+          "word": " سبحانه",
+          "start": 18.84,
+          "end": 19.72,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 19.72,
+      "end": 24.16,
+      "text": "خلقهم وعمهم برحمته فهو الرحيم",
+      "words": [
+        {
+          "word": " خلقهم",
+          "start": 19.72,
+          "end": 20.98,
+          "probability": 0.999
+        },
+        {
+          "word": " وعمهم",
+          "start": 20.98,
+          "end": 22.1,
+          "probability": 0.997
+        },
+        {
+          "word": " برحمته",
+          "start": 22.1,
+          "end": 22.96,
+          "probability": 1.0
+        },
+        {
+          "word": " فهو",
+          "start": 22.96,
+          "end": 23.62,
+          "probability": 0.999
+        },
+        {
+          "word": " الرحيم",
+          "start": 23.62,
+          "end": 24.16,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 24.16,
+      "end": 28.66,
+      "text": "خلقهم فلطف بهم وحلم عنهم",
+      "words": [
+        {
+          "word": " خلقهم",
+          "start": 24.16,
+          "end": 25.62,
+          "probability": 0.994
+        },
+        {
+          "word": " فلطف",
+          "start": 25.62,
+          "end": 26.64,
+          "probability": 0.999
+        },
+        {
+          "word": " بهم",
+          "start": 26.64,
+          "end": 27.1,
+          "probability": 0.999
+        },
+        {
+          "word": " وحلم",
+          "start": 27.1,
+          "end": 28.04,
+          "probability": 0.865
+        },
+        {
+          "word": " عنهم",
+          "start": 28.04,
+          "end": 28.66,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 28.66,
+      "end": 32.54,
+      "text": "خلقهم على الرغم من أخطائهم فهو اللطيف الحليم",
+      "words": [
+        {
+          "word": " خلقهم",
+          "start": 28.66,
+          "end": 29.24,
+          "probability": 0.172
+        },
+        {
+          "word": " على",
+          "start": 29.24,
+          "end": 29.24,
+          "probability": 0.749
+        },
+        {
+          "word": " الرغم",
+          "start": 29.24,
+          "end": 29.86,
+          "probability": 0.998
+        },
+        {
+          "word": " من",
+          "start": 29.86,
+          "end": 29.98,
+          "probability": 0.999
+        },
+        {
+          "word": " أخطائهم",
+          "start": 29.98,
+          "end": 30.84,
+          "probability": 0.995
+        },
+        {
+          "word": " فهو",
+          "start": 30.84,
+          "end": 31.34,
+          "probability": 0.994
+        },
+        {
+          "word": " اللطيف",
+          "start": 31.34,
+          "end": 31.94,
+          "probability": 0.998
+        },
+        {
+          "word": " الحليم",
+          "start": 31.94,
+          "end": 32.54,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 32.54,
+      "end": 37.56,
+      "text": "يحب أن يسمع صوت عبده المؤمن بالشكر في السراء",
+      "words": [
+        {
+          "word": " يحب",
+          "start": 32.54,
+          "end": 33.7,
+          "probability": 0.995
+        },
+        {
+          "word": " أن",
+          "start": 33.7,
+          "end": 33.8,
+          "probability": 0.997
+        },
+        {
+          "word": " يسمع",
+          "start": 33.8,
+          "end": 34.26,
+          "probability": 1.0
+        },
+        {
+          "word": " صوت",
+          "start": 34.26,
+          "end": 34.74,
+          "probability": 0.999
+        },
+        {
+          "word": " عبده",
+          "start": 34.74,
+          "end": 35.16,
+          "probability": 0.999
+        },
+        {
+          "word": " المؤمن",
+          "start": 35.16,
+          "end": 35.72,
+          "probability": 1.0
+        },
+        {
+          "word": " بالشكر",
+          "start": 35.72,
+          "end": 36.84,
+          "probability": 0.998
+        },
+        {
+          "word": " في",
+          "start": 36.84,
+          "end": 36.98,
+          "probability": 0.999
+        },
+        {
+          "word": " السراء",
+          "start": 36.98,
+          "end": 37.56,
+          "probability": 0.958
+        }
+      ]
+    },
+    {
+      "start": 37.56,
+      "end": 39.94,
+      "text": "والتضرع في الضراء",
+      "words": [
+        {
+          "word": " والتضرع",
+          "start": 37.56,
+          "end": 38.98,
+          "probability": 0.998
+        },
+        {
+          "word": " في",
+          "start": 38.98,
+          "end": 39.14,
+          "probability": 1.0
+        },
+        {
+          "word": " الضراء",
+          "start": 39.14,
+          "end": 39.94,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 39.94,
+      "end": 43.06,
+      "text": "فإن غفل العبد عن ربه ابتلاه",
+      "words": [
+        {
+          "word": " فإن",
+          "start": 39.94,
+          "end": 40.96,
+          "probability": 0.999
+        },
+        {
+          "word": " غفل",
+          "start": 40.96,
+          "end": 41.34,
+          "probability": 1.0
+        },
+        {
+          "word": " العبد",
+          "start": 41.34,
+          "end": 41.74,
+          "probability": 1.0
+        },
+        {
+          "word": " عن",
+          "start": 41.74,
+          "end": 41.9,
+          "probability": 0.994
+        },
+        {
+          "word": " ربه",
+          "start": 41.9,
+          "end": 42.36,
+          "probability": 1.0
+        },
+        {
+          "word": " ابتلاه",
+          "start": 42.36,
+          "end": 43.06,
+          "probability": 0.994
+        }
+      ]
+    },
+    {
+      "start": 43.06,
+      "end": 48.38,
+      "text": "ليرده إليه فيسمع تضرعه ودعاءه وبكاه",
+      "words": [
+        {
+          "word": " ليرده",
+          "start": 43.06,
+          "end": 44.38,
+          "probability": 0.999
+        },
+        {
+          "word": " إليه",
+          "start": 44.38,
+          "end": 45.08,
+          "probability": 1.0
+        },
+        {
+          "word": " فيسمع",
+          "start": 45.08,
+          "end": 45.78,
+          "probability": 1.0
+        },
+        {
+          "word": " تضرعه",
+          "start": 45.78,
+          "end": 46.58,
+          "probability": 1.0
+        },
+        {
+          "word": " ودعاءه",
+          "start": 46.58,
+          "end": 47.54,
+          "probability": 0.995
+        },
+        {
+          "word": " وبكاه",
+          "start": 47.54,
+          "end": 48.38,
+          "probability": 0.996
+        }
+      ]
+    },
+    {
+      "start": 48.38,
+      "end": 51.86,
+      "text": "وهو في ابتلائه رحيم حكيم",
+      "words": [
+        {
+          "word": " وهو",
+          "start": 48.38,
+          "end": 49.9,
+          "probability": 0.999
+        },
+        {
+          "word": " في",
+          "start": 49.9,
+          "end": 50.04,
+          "probability": 0.999
+        },
+        {
+          "word": " ابتلائه",
+          "start": 50.04,
+          "end": 50.68,
+          "probability": 0.993
+        },
+        {
+          "word": " رحيم",
+          "start": 50.68,
+          "end": 51.28,
+          "probability": 0.977
+        },
+        {
+          "word": " حكيم",
+          "start": 51.28,
+          "end": 51.86,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 51.86,
+      "end": 55.5,
+      "text": "يقول مررت بظروف صعبة",
+      "words": [
+        {
+          "word": " يقول",
+          "start": 51.86,
+          "end": 53.16,
+          "probability": 0.999
+        },
+        {
+          "word": " مررت",
+          "start": 53.16,
+          "end": 54.4,
+          "probability": 0.996
+        },
+        {
+          "word": " بظروف",
+          "start": 54.4,
+          "end": 55.0,
+          "probability": 0.999
+        },
+        {
+          "word": " صعبة",
+          "start": 55.0,
+          "end": 55.5,
+          "probability": 0.998
+        }
+      ]
+    },
+    {
+      "start": 55.5,
+      "end": 58.64,
+      "text": "لكن الله وفقني إلى إحسانه",
+      "words": [
+        {
+          "word": " لكن",
+          "start": 55.5,
+          "end": 56.54,
+          "probability": 0.997
+        },
+        {
+          "word": " الله",
+          "start": 56.54,
+          "end": 56.96,
+          "probability": 0.999
+        },
+        {
+          "word": " وفقني",
+          "start": 56.96,
+          "end": 57.88,
+          "probability": 0.993
+        },
+        {
+          "word": " إلى",
+          "start": 57.88,
+          "end": 58.14,
+          "probability": 0.997
+        },
+        {
+          "word": " إحسانه",
+          "start": 58.14,
+          "end": 58.64,
+          "probability": 0.822
+        }
+      ]
+    },
+    {
+      "start": 58.66,
+      "end": 60.12,
+      "text": "وإحسان ظن به تعالى",
+      "words": [
+        {
+          "word": " وإحسان",
+          "start": 58.66,
+          "end": 58.7,
+          "probability": 0.423
+        },
+        {
+          "word": " ظن",
+          "start": 58.7,
+          "end": 59.14,
+          "probability": 0.836
+        },
+        {
+          "word": " به",
+          "start": 59.14,
+          "end": 59.4,
+          "probability": 0.972
+        },
+        {
+          "word": " تعالى",
+          "start": 59.4,
+          "end": 60.12,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 60.12,
+      "end": 62.48,
+      "text": "وبحكمته ورحمته",
+      "words": [
+        {
+          "word": " وبحكمته",
+          "start": 60.12,
+          "end": 61.7,
+          "probability": 0.985
+        },
+        {
+          "word": " ورحمته",
+          "start": 61.7,
+          "end": 62.48,
+          "probability": 0.998
+        }
+      ]
+    },
+    {
+      "start": 62.48,
+      "end": 65.98,
+      "text": "وأخوكم مر بظروف صعبة",
+      "words": [
+        {
+          "word": " وأخوكم",
+          "start": 62.48,
+          "end": 63.92,
+          "probability": 0.988
+        },
+        {
+          "word": " مر",
+          "start": 63.92,
+          "end": 64.8,
+          "probability": 0.994
+        },
+        {
+          "word": " بظروف",
+          "start": 64.8,
+          "end": 65.44,
+          "probability": 0.979
+        },
+        {
+          "word": " صعبة",
+          "start": 65.44,
+          "end": 65.98,
+          "probability": 0.978
+        }
+      ]
+    },
+    {
+      "start": 65.98,
+      "end": 70.0,
+      "text": "وكان الدكتور إياد قنيب حفظه الله تعالى",
+      "words": [
+        {
+          "word": " وكان",
+          "start": 65.98,
+          "end": 67.14,
+          "probability": 0.986
+        },
+        {
+          "word": " الدكتور",
+          "start": 67.14,
+          "end": 67.9,
+          "probability": 0.999
+        },
+        {
+          "word": " إياد",
+          "start": 67.9,
+          "end": 68.24,
+          "probability": 0.981
+        },
+        {
+          "word": " قنيب",
+          "start": 68.24,
+          "end": 68.6,
+          "probability": 0.777
+        },
+        {
+          "word": " حفظه",
+          "start": 68.6,
+          "end": 69.12,
+          "probability": 0.995
+        },
+        {
+          "word": " الله",
+          "start": 69.12,
+          "end": 69.34,
+          "probability": 0.997
+        },
+        {
+          "word": " تعالى",
+          "start": 69.34,
+          "end": 70.0,
+          "probability": 0.993
+        }
+      ]
+    },
+    {
+      "start": 70.0,
+      "end": 74.6,
+      "text": "من الرجال الذين وقفوا معي في محنته سنة 2022",
+      "words": [
+        {
+          "word": " من",
+          "start": 70.0,
+          "end": 70.9,
+          "probability": 0.997
+        },
+        {
+          "word": " الرجال",
+          "start": 70.9,
+          "end": 71.56,
+          "probability": 1.0
+        },
+        {
+          "word": " الذين",
+          "start": 71.56,
+          "end": 71.98,
+          "probability": 0.999
+        },
+        {
+          "word": " وقفوا",
+          "start": 71.98,
+          "end": 72.58,
+          "probability": 0.999
+        },
+        {
+          "word": " معي",
+          "start": 72.58,
+          "end": 72.92,
+          "probability": 0.993
+        },
+        {
+          "word": " في",
+          "start": 72.92,
+          "end": 73.1,
+          "probability": 0.998
+        },
+        {
+          "word": " محنته",
+          "start": 73.1,
+          "end": 73.66,
+          "probability": 0.984
+        },
+        {
+          "word": " سنة",
+          "start": 73.66,
+          "end": 74.06,
+          "probability": 0.999
+        },
+        {
+          "word": " 2022",
+          "start": 74.06,
+          "end": 74.6,
+          "probability": 0.732
+        }
+      ]
+    },
+    {
+      "start": 76.08,
+      "end": 78.78,
+      "text": "عرض علي عملا في الأردن",
+      "words": [
+        {
+          "word": " عرض",
+          "start": 76.08,
+          "end": 77.16,
+          "probability": 0.992
+        },
+        {
+          "word": " علي",
+          "start": 77.16,
+          "end": 77.38,
+          "probability": 0.962
+        },
+        {
+          "word": " عملا",
+          "start": 77.38,
+          "end": 77.98,
+          "probability": 0.987
+        },
+        {
+          "word": " في",
+          "start": 77.98,
+          "end": 78.22,
+          "probability": 0.9
+        },
+        {
+          "word": " الأردن",
+          "start": 78.22,
+          "end": 78.78,
+          "probability": 0.998
+        }
+      ]
+    },
+    {
+      "start": 78.78,
+      "end": 81.56,
+      "text": "جزاه الله عز وجل خيرا ورعاه",
+      "words": [
+        {
+          "word": " جزاه",
+          "start": 78.78,
+          "end": 79.52,
+          "probability": 0.971
+        },
+        {
+          "word": " الله",
+          "start": 79.52,
+          "end": 79.72,
+          "probability": 0.999
+        },
+        {
+          "word": " عز",
+          "start": 79.72,
+          "end": 80.2,
+          "probability": 1.0
+        },
+        {
+          "word": " وجل",
+          "start": 80.2,
+          "end": 80.56,
+          "probability": 0.999
+        },
+        {
+          "word": " خيرا",
+          "start": 80.56,
+          "end": 81.06,
+          "probability": 0.998
+        },
+        {
+          "word": " ورعاه",
+          "start": 81.06,
+          "end": 81.56,
+          "probability": 0.998
+        }
+      ]
+    },
+    {
+      "start": 81.56,
+      "end": 86.28,
+      "text": "وبارك فيه ولم يتيسر لي السفر حينها",
+      "words": [
+        {
+          "word": " وبارك",
+          "start": 81.56,
+          "end": 82.7,
+          "probability": 0.991
+        },
+        {
+          "word": " فيه",
+          "start": 82.7,
+          "end": 83.1,
+          "probability": 1.0
+        },
+        {
+          "word": " ولم",
+          "start": 83.1,
+          "end": 83.94,
+          "probability": 1.0
+        },
+        {
+          "word": " يتيسر",
+          "start": 83.94,
+          "end": 84.68,
+          "probability": 0.999
+        },
+        {
+          "word": " لي",
+          "start": 84.68,
+          "end": 84.84,
+          "probability": 0.986
+        },
+        {
+          "word": " السفر",
+          "start": 84.84,
+          "end": 85.74,
+          "probability": 0.999
+        },
+        {
+          "word": " حينها",
+          "start": 85.74,
+          "end": 86.28,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 86.28,
+      "end": 88.64,
+      "text": "مررت بظروف صعبة",
+      "words": [
+        {
+          "word": " مررت",
+          "start": 86.28,
+          "end": 87.8,
+          "probability": 0.843
+        },
+        {
+          "word": " بظروف",
+          "start": 87.8,
+          "end": 88.34,
+          "probability": 0.998
+        },
+        {
+          "word": " صعبة",
+          "start": 88.34,
+          "end": 88.64,
+          "probability": 0.995
+        }
+      ]
+    },
+    {
+      "start": 88.66,
+      "end": 93.1,
+      "text": "لكن الله وفقني إلى إحسان الظن به تعالى",
+      "words": [
+        {
+          "word": " لكن",
+          "start": 88.66,
+          "end": 89.8,
+          "probability": 0.944
+        },
+        {
+          "word": " الله",
+          "start": 89.8,
+          "end": 90.2,
+          "probability": 0.998
+        },
+        {
+          "word": " وفقني",
+          "start": 90.2,
+          "end": 91.08,
+          "probability": 0.991
+        },
+        {
+          "word": " إلى",
+          "start": 91.08,
+          "end": 91.32,
+          "probability": 0.985
+        },
+        {
+          "word": " إحسان",
+          "start": 91.32,
+          "end": 91.84,
+          "probability": 0.999
+        },
+        {
+          "word": " الظن",
+          "start": 91.84,
+          "end": 92.2,
+          "probability": 0.99
+        },
+        {
+          "word": " به",
+          "start": 92.2,
+          "end": 92.44,
+          "probability": 0.999
+        },
+        {
+          "word": " تعالى",
+          "start": 92.44,
+          "end": 93.1,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 93.1,
+      "end": 95.36,
+      "text": "وبحكمته ورحمته",
+      "words": [
+        {
+          "word": " وبحكمته",
+          "start": 93.1,
+          "end": 94.64,
+          "probability": 0.997
+        },
+        {
+          "word": " ورحمته",
+          "start": 94.64,
+          "end": 95.36,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 95.36,
+      "end": 98.04,
+      "text": "فكان الله تعالى عند ظني",
+      "words": [
+        {
+          "word": " فكان",
+          "start": 95.36,
+          "end": 96.32,
+          "probability": 0.997
+        },
+        {
+          "word": " الله",
+          "start": 96.32,
+          "end": 96.6,
+          "probability": 1.0
+        },
+        {
+          "word": " تعالى",
+          "start": 96.6,
+          "end": 97.26,
+          "probability": 0.999
+        },
+        {
+          "word": " عند",
+          "start": 97.26,
+          "end": 97.54,
+          "probability": 0.999
+        },
+        {
+          "word": " ظني",
+          "start": 97.54,
+          "end": 98.04,
+          "probability": 0.96
+        }
+      ]
+    },
+    {
+      "start": 98.04,
+      "end": 101.6,
+      "text": "وحول نار البلاء بردا وسلاما",
+      "words": [
+        {
+          "word": " وحول",
+          "start": 98.04,
+          "end": 99.34,
+          "probability": 0.99
+        },
+        {
+          "word": " نار",
+          "start": 99.34,
+          "end": 99.82,
+          "probability": 0.999
+        },
+        {
+          "word": " البلاء",
+          "start": 99.82,
+          "end": 100.36,
+          "probability": 0.999
+        },
+        {
+          "word": " بردا",
+          "start": 100.36,
+          "end": 100.8,
+          "probability": 0.987
+        },
+        {
+          "word": " وسلاما",
+          "start": 100.8,
+          "end": 101.6,
+          "probability": 0.958
+        }
+      ]
+    },
+    {
+      "start": 101.6,
+      "end": 103.62,
+      "text": "يقصد هنا محنة سجنه",
+      "words": [
+        {
+          "word": " يقصد",
+          "start": 101.6,
+          "end": 102.44,
+          "probability": 0.998
+        },
+        {
+          "word": " هنا",
+          "start": 102.44,
+          "end": 102.64,
+          "probability": 1.0
+        },
+        {
+          "word": " محنة",
+          "start": 102.64,
+          "end": 103.12,
+          "probability": 0.999
+        },
+        {
+          "word": " سجنه",
+          "start": 103.12,
+          "end": 103.62,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 103.62,
+      "end": 104.76,
+      "text": "كيف لا",
+      "words": [
+        {
+          "word": " كيف",
+          "start": 103.62,
+          "end": 104.56,
+          "probability": 0.998
+        },
+        {
+          "word": " لا",
+          "start": 104.56,
+          "end": 104.76,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 104.76,
+      "end": 109.14,
+      "text": "وهو تعالى القائل في الحديث القدسي",
+      "words": [
+        {
+          "word": " وهو",
+          "start": 104.76,
+          "end": 105.78,
+          "probability": 0.942
+        },
+        {
+          "word": " تعالى",
+          "start": 105.78,
+          "end": 106.52,
+          "probability": 1.0
+        },
+        {
+          "word": " القائل",
+          "start": 106.52,
+          "end": 107.72,
+          "probability": 0.999
+        },
+        {
+          "word": " في",
+          "start": 107.72,
+          "end": 107.82,
+          "probability": 1.0
+        },
+        {
+          "word": " الحديث",
+          "start": 107.82,
+          "end": 108.46,
+          "probability": 1.0
+        },
+        {
+          "word": " القدسي",
+          "start": 108.46,
+          "end": 109.14,
+          "probability": 0.999
+        }
+      ]
+    },
+    {
+      "start": 109.14,
+      "end": 111.48,
+      "text": "أنا عند ظني بي",
+      "words": [
+        {
+          "word": " أنا",
+          "start": 109.14,
+          "end": 110.06,
+          "probability": 0.997
+        },
+        {
+          "word": " عند",
+          "start": 110.06,
+          "end": 110.34,
+          "probability": 0.999
+        },
+        {
+          "word": " ظني",
+          "start": 110.34,
+          "end": 111.02,
+          "probability": 0.994
+        },
+        {
+          "word": " بي",
+          "start": 111.02,
+          "end": 111.48,
+          "probability": 0.94
+        }
+      ]
+    },
+    {
+      "start": 111.48,
+      "end": 114.6,
+      "text": "أنا عند ظن عبدي بي",
+      "words": [
+        {
+          "word": " أنا",
+          "start": 111.48,
+          "end": 112.44,
+          "probability": 0.992
+        },
+        {
+          "word": " عند",
+          "start": 112.44,
+          "end": 112.92,
+          "probability": 0.999
+        },
+        {
+          "word": " ظن",
+          "start": 112.92,
+          "end": 113.64,
+          "probability": 0.95
+        },
+        {
+          "word": " عبدي",
+          "start": 113.64,
+          "end": 114.18,
+          "probability": 0.997
+        },
+        {
+          "word": " بي",
+          "start": 114.18,
+          "end": 114.6,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 114.6,
+      "end": 116.04,
+      "text": "رواه البخاري",
+      "words": [
+        {
+          "word": " رواه",
+          "start": 114.6,
+          "end": 115.4,
+          "probability": 0.999
+        },
+        {
+          "word": " البخاري",
+          "start": 115.4,
+          "end": 116.04,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 116.18,
+      "end": 124.06,
+      "text": "وإي والله",
+      "words": [
+        {
+          "word": " وإي",
+          "start": 116.18,
+          "end": 117.44,
+          "probability": 0.981
+        },
+        {
+          "word": " والله",
+          "start": 123.46,
+          "end": 124.06,
+          "probability": 0.731
+        }
+      ]
+    },
+    {
+      "start": 124.68,
+      "end": 127.0,
+      "text": "عندما تظن بربك خيرا",
+      "words": [
+        {
+          "word": " عندما",
+          "start": 124.68,
+          "end": 125.18,
+          "probability": 0.988
+        },
+        {
+          "word": " تظن",
+          "start": 125.18,
+          "end": 125.72,
+          "probability": 0.998
+        },
+        {
+          "word": " بربك",
+          "start": 125.72,
+          "end": 126.36,
+          "probability": 0.996
+        },
+        {
+          "word": " خيرا",
+          "start": 126.36,
+          "end": 127.0,
+          "probability": 0.998
+        }
+      ]
+    },
+    {
+      "start": 127.0,
+      "end": 130.08,
+      "text": "عندما تظن بربك خيرا",
+      "words": [
+        {
+          "word": " عندما",
+          "start": 127.0,
+          "end": 128.46,
+          "probability": 0.589
+        },
+        {
+          "word": " تظن",
+          "start": 128.46,
+          "end": 128.92,
+          "probability": 1.0
+        },
+        {
+          "word": " بربك",
+          "start": 128.92,
+          "end": 129.54,
+          "probability": 1.0
+        },
+        {
+          "word": " خيرا",
+          "start": 129.54,
+          "end": 130.08,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 130.08,
+      "end": 133.36,
+      "text": "وتعمل عمل من هذا ظنه",
+      "words": [
+        {
+          "word": " وتعمل",
+          "start": 130.08,
+          "end": 131.28,
+          "probability": 0.997
+        },
+        {
+          "word": " عمل",
+          "start": 131.28,
+          "end": 132.12,
+          "probability": 0.934
+        },
+        {
+          "word": " من",
+          "start": 132.12,
+          "end": 132.28,
+          "probability": 0.999
+        },
+        {
+          "word": " هذا",
+          "start": 132.28,
+          "end": 132.64,
+          "probability": 0.997
+        },
+        {
+          "word": " ظنه",
+          "start": 132.64,
+          "end": 133.36,
+          "probability": 0.997
+        }
+      ]
+    },
+    {
+      "start": 133.36,
+      "end": 135.74,
+      "text": "ترى منه الخير كله",
+      "words": [
+        {
+          "word": " ترى",
+          "start": 133.36,
+          "end": 134.36,
+          "probability": 0.995
+        },
+        {
+          "word": " منه",
+          "start": 134.36,
+          "end": 134.7,
+          "probability": 1.0
+        },
+        {
+          "word": " الخير",
+          "start": 134.7,
+          "end": 135.12,
+          "probability": 0.999
+        },
+        {
+          "word": " كله",
+          "start": 135.12,
+          "end": 135.74,
+          "probability": 0.993
+        }
+      ]
+    },
+    {
+      "start": 135.74,
+      "end": 137.64,
+      "text": "ونستطيع أن نقول",
+      "words": [
+        {
+          "word": " ونستطيع",
+          "start": 135.74,
+          "end": 137.06,
+          "probability": 0.999
+        },
+        {
+          "word": " أن",
+          "start": 137.06,
+          "end": 137.2,
+          "probability": 0.98
+        },
+        {
+          "word": " نقول",
+          "start": 137.2,
+          "end": 137.64,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 137.64,
+      "end": 139.28,
+      "text": "وتعمل عمل",
+      "words": [
+        {
+          "word": " وتعمل",
+          "start": 137.64,
+          "end": 138.78,
+          "probability": 0.99
+        },
+        {
+          "word": " عمل",
+          "start": 138.78,
+          "end": 139.28,
+          "probability": 0.94
+        }
+      ]
+    },
+    {
+      "start": 139.28,
+      "end": 140.9,
+      "text": "ونعرب تعمل",
+      "words": [
+        {
+          "word": " ونعرب",
+          "start": 139.28,
+          "end": 140.32,
+          "probability": 0.851
+        },
+        {
+          "word": " تعمل",
+          "start": 140.32,
+          "end": 140.9,
+          "probability": 0.921
+        }
+      ]
+    }
+  ],
+  "text": "الله سبحانه وتعالى خالقنا ورازقنا وحبيبنا وسعت رحمته كل شيء خلق عباده ليعبدوه ليطيعوه ويحبوه خلقهم وتودد إليهم بالعطايا والنعم فهو الودود سبحانه خلقهم وعمهم برحمته فهو الرحيم خلقهم فلطف بهم وحلم عنهم خلقهم على الرغم من أخطائهم فهو اللطيف الحليم يحب أن يسمع صوت عبده المؤمن بالشكر في السراء والتضرع في الضراء فإن غفل العبد عن ربه ابتلاه ليرده إليه فيسمع تضرعه ودعاءه وبكاه وهو في ابتلائه رحيم حكيم يقول مررت بظروف صعبة لكن الله وفقني إلى إحسانه وإحسان ظن به تعالى وبحكمته ورحمته وأخوكم مر بظروف صعبة وكان الدكتور إياد قنيب حفظه الله تعالى من الرجال الذين وقفوا معي في محنته سنة 2022 عرض علي عملا في الأردن جزاه الله عز وجل خيرا ورعاه وبارك فيه ولم يتيسر لي السفر حينها مررت بظروف صعبة لكن الله وفقني إلى إحسان الظن به تعالى وبحكمته ورحمته فكان الله تعالى عند ظني وحول نار البلاء بردا وسلاما يقصد هنا محنة سجنه كيف لا وهو تعالى القائل في الحديث القدسي أنا عند ظني بي أنا عند ظن عبدي بي رواه البخاري وإي والله عندما تظن بربك خيرا عندما تظن بربك خيرا وتعمل عمل من هذا ظنه ترى منه الخير كله ونستطيع أن نقول وتعمل عمل ونعرب تعمل"
+}

@@ -18,8 +18,13 @@ from faster_whisper import WhisperModel
 MODEL_SIZE = "large-v3"
 
 
-def transcribe(audio_path: str, model_size: str = MODEL_SIZE) -> dict:
-    model = WhisperModel(model_size, device="auto", compute_type="auto")
+def load_model(model_size: str = MODEL_SIZE) -> WhisperModel:
+    return WhisperModel(model_size, device="auto", compute_type="auto")
+
+
+def transcribe(audio_path: str, model_size: str = MODEL_SIZE, model: WhisperModel | None = None) -> dict:
+    if model is None:
+        model = load_model(model_size)
 
     segments, info = model.transcribe(
         audio_path,
