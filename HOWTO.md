@@ -23,10 +23,11 @@ docs/     background/planning notes
 ## Prerequisites
 
 - Python 3.12+ venv with `faster-whisper`, `pymupdf`, `pytesseract`,
-  `Pillow`, `streamlit` installed (`requirements.txt`).
+  `Pillow`, `streamlit`, `weasyprint` installed (`requirements.txt`).
 - System `tesseract-ocr` + `tesseract-ocr-ara` (Arabic language pack), used
   for scanned/low-quality PDF pages.
-- `ffmpeg`, if you need to clip audio (see below).
+- `ffmpeg` — used to clip audio manually (see below) and, in the UI, to cut
+  each candidate comment's own playback clip for review.
 
 ### Setting up from a fresh clone
 
@@ -92,9 +93,12 @@ python3 src/align.py <book_pages.json> <transcript.json> [page_number] > comment
 ```
 Diffs the transcript's word sequence against the book's (book = reference).
 Runs of transcript words with no match in the book, at least 5 words long,
-are candidate comments. Pass a page number to restrict the comparison to
-one page; omit it to diff against the whole book. Prints a human-readable
-summary to stderr and the JSON array to stdout — hence the `>` redirect.
+are candidate comments. Each comment's book page is inferred from the
+nearest matched book text around it, so this works whether you pass a
+single page number (restricts comparison to it) or diff against the whole
+book (omit the argument) — either way every comment gets a page number.
+Prints a human-readable summary to stderr and the JSON array to stdout —
+hence the `>` redirect.
 
 ```bash
 python3 src/align.py output/book_pages.json output/full_transcript.json 4 > output/comments.json
@@ -125,15 +129,24 @@ Opens at `http://localhost:8501`. Then:
      run)
    - OCR fallback quality threshold (default 0.6)
 4. Click **Run pipeline**. Each stage reports progress in turn (book
-   extraction -> model load -> transcription -> alignment) — transcription
-   is the slow part, same as the CLI.
-5. Results appear as cards (timestamp, word count, the Arabic text, RTL).
-6. Download `comments.json`, `transcript.json`, or `book_pages.json` if you
-   want the raw output.
+   extraction -> model load -> transcription -> alignment -> per-comment
+   audio clipping) — transcription is the slow part, same as the CLI.
+5. **Review each candidate**: every card shows the book page and audio
+   timestamp, a player for just that clip (so you can listen and read
+   along), an editable text box pre-filled with the extracted text (fix
+   anything the transcript got wrong), and a "Keep as a comment" checkbox
+   (uncheck it to drop false positives like disfluencies).
+6. Click **Generate PDF report** — it uses whatever is currently in the
+   text boxes and checkboxes at that moment, so review everything first.
+   A **Download comments_report.pdf** button appears once it's built,
+   showing how many comments were kept.
+7. Download `comments.json`, `transcript.json`, or `book_pages.json` if you
+   want the raw (unreviewed) output instead.
 
 The Whisper model stays cached across runs in the same browser session, so
 switching files and re-running doesn't reload it — only changing the model
-size does.
+size does. Starting a new **Run pipeline** clears any edits/checkboxes and
+generated PDF from the previous run.
 
 Note: file uploads are capped at 500MB (`.streamlit/config.toml`); the full
 book PDF and a full session recording should both fit.
@@ -146,9 +159,14 @@ book PDF and a full session recording should both fit.
   "text": "...",       // normalized Arabic (no tashkeel, unified alef/hamza, no punctuation)
   "n_words": 54,
   "start": 51.86,       // seconds into the audio
-  "end": 87.8
+  "end": 87.8,
+  "page": 4             // inferred book page number
 }
 ```
+
+`comments_report.pdf` (UI only, after review) lists just the kept
+comments — your edited text, book page, and mm:ss timestamp range for
+each — with correctly shaped/reordered Arabic text (via WeasyPrint).
 
 ## Known limitations (not yet fixed)
 
@@ -162,4 +180,6 @@ book PDF and a full session recording should both fit.
   though it isn't one.
 - Both are exactly what the planned (not yet built) speech-rhythm signal —
   pace and pause durations from the word timestamps — is meant to help
-  disambiguate, per the original project brief.
+  disambiguate, per the original project brief. Until then, the UI's
+  review step (listen to the clip, edit the text, uncheck false
+  positives) is the actual fix — that's what it's for.

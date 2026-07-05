@@ -3,25 +3,31 @@ Streamlit UI for the reading-club pipeline.
 
 Wraps the same three stages used from the command line (extract_book,
 transcribe, align) so both entry points stay in sync -- this file adds
-no pipeline logic of its own, only file handling, progress display, and
-result rendering.
+no pipeline logic of its own beyond per-comment audio clipping and PDF
+export, which only exist here (reviewing by ear/eye is a UI-only step).
 
 Run with: streamlit run app.py
 """
 
 import json
+import subprocess
 import tempfile
 from pathlib import Path
 
 import streamlit as st
 
 from align import extract_comments_from_transcript
+from export_pdf import build_pdf
 from extract_book import extract_book
 from transcribe import MODEL_SIZE, load_model, transcribe
 
 MODEL_SIZES = ["large-v3", "medium", "small", "base", "tiny"]
 
 st.set_page_config(page_title="Reading Club — Comment Extractor", layout="centered")
+st.markdown(
+    "<style>.stTextArea textarea { direction: rtl; text-align: right; font-size: 1.1rem; }</style>",
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_resource(show_spinner=False)
@@ -32,6 +38,26 @@ def cached_model(model_size: str):
 def format_ts(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)
     return f"{m}:{s:02d}"
+
+
+def extract_clip(audio_path: str, start: float, end: float) -> bytes:
+    """Cuts one comment's audio span out of the full recording as an mp3."""
+    duration = max(end - start, 0.1)
+    with tempfile.NamedTemporaryFile(suffix=".mp3") as tmp_clip:
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", str(start),
+                "-i", audio_path,
+                "-t", str(duration),
+                "-ar", "44100", "-ac", "1",
+                "-c:a", "libmp3lame", "-q:a", "4",
+                tmp_clip.name,
+            ],
+            check=True,
+            capture_output=True,
+        )
+        return Path(tmp_clip.name).read_bytes()
 
 
 st.title("Reading Club — Comment Extractor")
@@ -54,6 +80,13 @@ with st.expander("Advanced options"):
 run = st.button("Run pipeline", type="primary", disabled=not (pdf_file and audio_file))
 
 if run:
+    # Drop any leftover per-comment widget state / generated PDF from a
+    # previous run so stale edits don't leak into a new one's results.
+    for key in list(st.session_state.keys()):
+        if key.startswith("text_") or key.startswith("keep_"):
+            del st.session_state[key]
+    st.session_state.pop("pdf_bytes", None)
+
     with tempfile.TemporaryDirectory() as tmp:
         pdf_path = Path(tmp) / pdf_file.name
         pdf_path.write_bytes(pdf_file.getvalue())
@@ -80,30 +113,73 @@ if run:
             )
 
         with st.status("Aligning transcript against book text...") as status:
-            book_text = "\n".join(p["text"] for p in pages)
             comments = extract_comments_from_transcript(
-                book_text, result["segments"], min_words=min_words
+                pages, result["segments"], min_words=min_words
             )
             status.update(
                 label=f"Found {len(comments)} candidate comment(s)", state="complete"
             )
 
+        with st.status("Extracting comment audio clips...") as status:
+            clips = [extract_clip(str(audio_path), c["start"], c["end"]) for c in comments]
+            status.update(label=f"Extracted {len(clips)} audio clip(s)", state="complete")
+
         st.session_state["pages"] = pages
         st.session_state["transcript"] = result
         st.session_state["comments"] = comments
+        st.session_state["clips"] = clips
+        st.session_state["book_title"] = Path(pdf_file.name).stem
 
 if "comments" in st.session_state:
     comments = st.session_state["comments"]
-    st.subheader(f"{len(comments)} candidate comment(s)")
+    clips = st.session_state["clips"]
+    st.subheader(f"{len(comments)} candidate comment(s) — review below")
+    st.caption(
+        "Listen to each clip, fix the text if the transcript got something "
+        "wrong, and uncheck anything that isn't actually a comment."
+    )
 
-    for c in comments:
+    for i, c in enumerate(comments):
         with st.container(border=True):
-            st.caption(f"{format_ts(c['start'])} – {format_ts(c['end'])}  ·  {c['n_words']} words")
-            st.markdown(
-                f'<div dir="rtl" style="text-align:right; font-size:1.3rem; '
-                f'line-height:2;">{c["text"]}</div>',
-                unsafe_allow_html=True,
+            st.caption(
+                f"page {c['page']} · {format_ts(c['start'])} – {format_ts(c['end'])} "
+                f"· {c['n_words']} words"
             )
+            st.audio(clips[i], format="audio/mp3")
+            st.text_area(
+                "Comment text",
+                value=c["text"],
+                key=f"text_{i}",
+                height=100,
+                label_visibility="collapsed",
+            )
+            st.checkbox("Keep as a comment", value=True, key=f"keep_{i}")
+
+    st.divider()
+
+    if st.button("Generate PDF report", type="primary"):
+        reviewed = [
+            {
+                "text": st.session_state[f"text_{i}"],
+                "page": c["page"],
+                "start": c["start"],
+                "end": c["end"],
+            }
+            for i, c in enumerate(comments)
+            if st.session_state.get(f"keep_{i}", True)
+        ]
+        st.session_state["pdf_bytes"] = build_pdf(
+            reviewed, book_title=st.session_state.get("book_title", "")
+        )
+        st.session_state["pdf_count"] = len(reviewed)
+
+    if "pdf_bytes" in st.session_state:
+        st.download_button(
+            f"Download comments_report.pdf ({st.session_state['pdf_count']} kept)",
+            st.session_state["pdf_bytes"],
+            file_name="comments_report.pdf",
+            mime="application/pdf",
+        )
 
     st.divider()
     dl1, dl2, dl3 = st.columns(3)

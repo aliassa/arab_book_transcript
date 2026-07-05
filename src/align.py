@@ -37,10 +37,42 @@ class Comment:
     text: str
     word_start: int  # index into transcript word list
     word_end: int  # exclusive
+    book_start: int  # index into book word list where the gap begins
+    book_end: int  # index into book word list where the gap ends
     n_words: int = field(init=False)
 
     def __post_init__(self):
         self.n_words = self.word_end - self.word_start
+
+
+def build_book_words(pages: list[dict]) -> tuple[list[str], list[int]]:
+    """
+    Tokenizes each page's text and returns the flattened word list
+    alongside a parallel list of which page number each word came from,
+    so a position in the word list can be mapped back to a page.
+    """
+    words: list[str] = []
+    word_pages: list[int] = []
+    for p in pages:
+        for w in tokenize(p["text"]):
+            words.append(w)
+            word_pages.append(p["page_number"])
+    return words, word_pages
+
+
+def infer_page(word_pages: list[int], book_start: int, book_end: int) -> int | None:
+    """
+    A comment sits in a gap between matched book positions, so there's no
+    book word "at" the gap to read a page off of directly. Use the page of
+    the book word just before the gap (where the reader was when they
+    digressed); fall back to the word just after (comment before any book
+    text has matched yet, e.g. an opening remark) or the last known page.
+    """
+    if book_start > 0:
+        return word_pages[book_start - 1]
+    if book_end < len(word_pages):
+        return word_pages[book_end]
+    return word_pages[-1] if word_pages else None
 
 
 def extract_candidates(
@@ -56,7 +88,7 @@ def extract_candidates(
     matcher = SequenceMatcher(a=book_words, b=transcript_words, autojunk=False)
     candidates = []
 
-    for tag, _a1, _a2, b1, b2 in matcher.get_opcodes():
+    for tag, a1, a2, b1, b2 in matcher.get_opcodes():
         if tag not in ("insert", "replace"):
             continue
         n_words = b2 - b1
@@ -67,6 +99,8 @@ def extract_candidates(
                 text=" ".join(transcript_words[b1:b2]),
                 word_start=b1,
                 word_end=b2,
+                book_start=a1,
+                book_end=a2,
             )
         )
 
@@ -74,22 +108,23 @@ def extract_candidates(
 
 
 def extract_comments_from_transcript(
-    book_text: str,
+    pages: list[dict],
     transcript_segments: list[dict],
     min_words: int = MIN_COMMENT_WORDS,
 ) -> list[dict]:
     """
-    High-level entry point: takes raw book text and Whisper segments
-    (each with 'text' and word-level 'words' timing), normalizes both,
-    aligns, and returns comments annotated with start/end timestamps
-    pulled from the original (non-normalized) word timings.
+    High-level entry point: takes book pages (as produced by extract_book,
+    each a {page_number, text, ...} dict) and Whisper segments (each with
+    'text' and word-level 'words' timing), normalizes both, aligns, and
+    returns comments annotated with start/end timestamps pulled from the
+    original (non-normalized) word timings, plus the inferred book page.
 
     Assumes normalize.tokenize's word count for a segment's text lines
     up 1:1 with its 'words' timing list, which holds as long as both are
     derived from the same whitespace-delimited splitting -- true for
     Whisper's word-level output on Arabic.
     """
-    book_words = tokenize(book_text)
+    book_words, book_word_pages = build_book_words(pages)
 
     # Flatten transcript into a single word list, keeping a parallel list
     # of (start, end) timestamps per normalized word.
@@ -120,6 +155,7 @@ def extract_comments_from_transcript(
                 "n_words": c.n_words,
                 "start": round(start_ts, 3),
                 "end": round(end_ts, 3),
+                "page": infer_page(book_word_pages, c.book_start, c.book_end),
             }
         )
     return comments
@@ -142,13 +178,15 @@ def main():
 
     if page_number is not None:
         pages = [p for p in pages if p["page_number"] == page_number]
-    book_text = "\n".join(p["text"] for p in pages)
 
-    comments = extract_comments_from_transcript(book_text, transcript["segments"])
+    comments = extract_comments_from_transcript(pages, transcript["segments"])
 
     print(f"Found {len(comments)} candidate comment(s):\n", file=sys.stderr)
     for c in comments:
-        print(f"  [{c['start']:7.2f}-{c['end']:7.2f}] ({c['n_words']}w) {c['text']}", file=sys.stderr)
+        print(
+            f"  [{c['start']:7.2f}-{c['end']:7.2f}] p.{c['page']} ({c['n_words']}w) {c['text']}",
+            file=sys.stderr,
+        )
 
     print(json.dumps(comments, ensure_ascii=False, indent=2))
 
