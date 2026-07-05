@@ -12,6 +12,7 @@ Run with: streamlit run app.py
 import json
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -22,6 +23,19 @@ from extract_book import extract_book
 from transcribe import MODEL_SIZE, load_model, transcribe
 
 MODEL_SIZES = ["large-v3", "medium", "small", "base", "tiny"]
+
+# Rough seconds-of-processing-per-second-of-audio on CPU (no GPU). Based on
+# this machine's own measured ~2x real-time for large-v3; the rest are
+# ballpark guesses at how model size scales, not measurements -- actual
+# speed depends heavily on hardware.
+SPEED_MULTIPLIER = {
+    "large-v3": 2.0,
+    "medium": 1.1,
+    "small": 0.5,
+    "base": 0.25,
+    "tiny": 0.15,
+}
+MODEL_LOAD_OVERHEAD_S = 20  # rough fixed cost the first time a size is loaded
 
 st.set_page_config(page_title="Reading Club — Comment Extractor", layout="centered")
 st.markdown(
@@ -38,6 +52,33 @@ def cached_model(model_size: str):
 def format_ts(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)
     return f"{m}:{s:02d}"
+
+
+def format_duration(seconds: float) -> str:
+    seconds = max(int(round(seconds)), 0)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h {m:02d}m"
+    if m:
+        return f"{m}m {s:02d}s"
+    return f"{s}s"
+
+
+def probe_duration(data: bytes, suffix: str) -> float | None:
+    """Audio duration via ffprobe, without running any transcription."""
+    with tempfile.NamedTemporaryFile(suffix=suffix) as f:
+        f.write(data)
+        f.flush()
+        try:
+            out = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "csv=p=0", f.name],
+                capture_output=True, text=True, check=True,
+            )
+            return float(out.stdout.strip())
+        except (subprocess.CalledProcessError, ValueError):
+            return None
 
 
 def extract_clip(audio_path: str, start: float, end: float) -> bytes:
@@ -77,6 +118,23 @@ with st.expander("Advanced options"):
     )
     quality_threshold = st.slider("OCR fallback quality threshold", 0.0, 1.0, 0.6, 0.05)
 
+estimated_seconds = None
+if audio_file is not None:
+    audio_duration = probe_duration(audio_file.getvalue(), Path(audio_file.name).suffix)
+    if audio_duration:
+        overhead = 0 if model_size in st.session_state.get("loaded_models", set()) else MODEL_LOAD_OVERHEAD_S
+        estimated_seconds = audio_duration * SPEED_MULTIPLIER.get(model_size, 1.0) + overhead
+        with st.container(border=True):
+            st.metric(
+                "Estimated time to result",
+                format_duration(estimated_seconds),
+                help=(
+                    f"Rough estimate for {format_duration(audio_duration)} of audio "
+                    f"on '{model_size}' running on CPU -- actual time depends on "
+                    "your hardware, this is a ballpark, not a promise."
+                ),
+            )
+
 run = st.button("Run pipeline", type="primary", disabled=not (pdf_file and audio_file))
 
 if run:
@@ -87,6 +145,7 @@ if run:
             del st.session_state[key]
     st.session_state.pop("pdf_bytes", None)
 
+    run_start = time.time()
     with tempfile.TemporaryDirectory() as tmp:
         pdf_path = Path(tmp) / pdf_file.name
         pdf_path.write_bytes(pdf_file.getvalue())
@@ -103,6 +162,7 @@ if run:
 
         with st.status("Loading Whisper model...") as status:
             model = cached_model(model_size)
+            st.session_state.setdefault("loaded_models", set()).add(model_size)
             status.update(label=f"Model ready ({model_size})", state="complete")
 
         with st.status("Transcribing audio (this can take a while)...") as status:
@@ -129,10 +189,23 @@ if run:
         st.session_state["comments"] = comments
         st.session_state["clips"] = clips
         st.session_state["book_title"] = Path(pdf_file.name).stem
+        st.session_state["actual_duration"] = time.time() - run_start
+        st.session_state["estimated_duration"] = estimated_seconds
 
 if "comments" in st.session_state:
     comments = st.session_state["comments"]
     clips = st.session_state["clips"]
+
+    with st.container(border=True):
+        actual = st.session_state["actual_duration"]
+        estimated = st.session_state.get("estimated_duration")
+        if estimated:
+            col1, col2 = st.columns(2)
+            col1.metric("Actual time taken", format_duration(actual))
+            col2.metric("Estimated beforehand", format_duration(estimated))
+        else:
+            st.metric("Actual time taken", format_duration(actual))
+
     st.subheader(f"{len(comments)} candidate comment(s) — review below")
     st.caption(
         "Listen to each clip, fix the text if the transcript got something "
