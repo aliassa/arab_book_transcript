@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+
+# source/working media -- large, regenerable, keep local only
+*.pdf
+*.ogg
+*.mp3
+*.wav
+*.m4a
+*.flac
+*_transcript.json
+*_pages.json
+*_comments.json
+results_page.html

@@ -10,15 +10,32 @@ Two ways to run it: the command line (`extract_book.py`, `transcribe.py`,
 `align.py`) or a Streamlit UI (`app.py`) that wraps the same functions.
 Pick whichever is more convenient — output is identical either way.
 
-## Prerequisites (already installed on this machine)
+## Prerequisites
 
-- Python venv at `.venv/` with `faster-whisper`, `pymupdf`, `pytesseract`,
-  `Pillow`, `streamlit` installed.
+- Python 3.12+ venv with `faster-whisper`, `pymupdf`, `pytesseract`,
+  `Pillow`, `streamlit` installed (`requirements.txt`).
 - System `tesseract-ocr` + `tesseract-ocr-ara` (Arabic language pack), used
   for scanned/low-quality PDF pages.
 - `ffmpeg`, if you need to clip audio (see below).
 
-Activate the venv before running anything:
+### Setting up from a fresh clone
+
+The venv is not committed to git (`.gitignore`) — it's large,
+platform-specific, and trivial to recreate from `requirements.txt`:
+
+```bash
+cd /home/ali/perso/book_extraction
+
+# system deps (Debian/Ubuntu)
+sudo apt install -y tesseract-ocr tesseract-ocr-ara ffmpeg
+
+# python deps
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Every time you come back to work on this (new shell), just:
 ```bash
 cd /home/ali/perso/book_extraction
 source .venv/bin/activate

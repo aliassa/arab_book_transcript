@@ -1,0 +1,5 @@
+faster-whisper==1.2.1
+pymupdf==1.28.0
+pytesseract==0.3.13
+Pillow==12.3.0
+streamlit==1.58.0
