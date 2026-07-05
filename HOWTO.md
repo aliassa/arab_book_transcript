@@ -31,10 +31,13 @@ docs/     background/planning notes
 ### Setting up from a fresh clone
 
 The venv is not committed to git (`.gitignore`) — it's large,
-platform-specific, and trivial to recreate from `requirements.txt`:
+platform-specific, and trivial to recreate from `requirements.txt`. Neither
+is `data/` (input PDFs/audio) or `output/` (generated files) — copy your
+book PDF and session recording into `data/` yourself after cloning.
 
 ```bash
-cd /home/ali/perso/book_extraction
+git clone git@github.com:aliassa/arab_book_transcript.git
+cd arab_book_transcript
 
 # system deps (Debian/Ubuntu)
 sudo apt install -y tesseract-ocr tesseract-ocr-ara ffmpeg
@@ -43,11 +46,13 @@ sudo apt install -y tesseract-ocr tesseract-ocr-ara ffmpeg
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+mkdir -p data output
 ```
 
 Every time you come back to work on this (new shell), just:
 ```bash
-cd /home/ali/perso/book_extraction
+cd arab_book_transcript   # or wherever you cloned it
 source .venv/bin/activate
 ```
 
