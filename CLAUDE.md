@@ -100,10 +100,29 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
   generated PDF persist in `st.session_state` across reruns *by design*
   — but must be explicitly cleared at the start of a new pipeline run, or
   a previous run's edits/checkboxes leak into the new one's results.
-- The uploaded PDF/audio live in a `tempfile.TemporaryDirectory()` that's
-  torn down at the end of the `if run:` block — anything needed after
-  that (comments, transcript, per-comment audio clips as bytes) must be
-  copied into `st.session_state` before the block exits.
+- Book/session picked via dropdowns over `data/<book>/<session>/`, not file
+  upload (`list_book_dirs`, `list_session_dirs`, `find_pdf`, `find_audio`).
+  `find_pdf(session_dir, book_dir)` prefers a session-specific PDF (e.g. a
+  pre-clipped page range) if one exists in the session folder, else falls
+  back to the book-level PDF — but a session-specific PDF is optional, not
+  required: `align.py`'s diff only extracts unmatched *transcript* words, so
+  handing it the full book is correct regardless of which pages that
+  session actually covers.
+- Extracted page text is cached next to the PDF as a hidden
+  `.<pdf-stem>_pages_cache.json` (`get_book_pages`), keyed on the PDF's
+  mtime + `quality_threshold`, since the same book PDF is reused across
+  every session and OCR is the expensive part — without this, extraction
+  would silently re-run (and re-OCR) on every single session.
+- `book_info.json` in the book folder holds `{title_ar, author_ar}` for the
+  Arabic PDF report (`export_pdf.py`); defaults to the book PDF's filename
+  stem if absent, and gets written back to disk on every pipeline run so
+  the user only types it once per book.
+- Nothing produced by a run (other than the two caches above) is ever
+  written to disk — results only exist in `st.session_state` for the life
+  of the server process. If the user closes/restarts the server before
+  using one of the download buttons (`comments.json`/`transcript.json`/
+  `book_pages.json`/PDF), the run's output is unrecoverable and must be
+  regenerated (extraction will be instant via cache; transcription won't).
 - Processing-time estimates (`SPEED_MULTIPLIER` dict) are rough,
   hardware-dependent guesses, calibrated only for `large-v3` on this
   machine's CPU (no GPU) — don't treat them as measured for other model

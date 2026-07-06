@@ -20,6 +20,20 @@ output/   transcripts, extracted book text, comments (gitignored -- generated)
 docs/     background/planning notes
 ```
 
+The UI expects `data/` organized per book, one subfolder per reading session:
+
+```
+data/<book_folder>/book.pdf          # full book PDF
+data/<book_folder>/book_info.json    # {"title_ar": "...", "author_ar": "..."} -- optional, UI fills it in
+data/<book_folder>/1/session1.ogg    # session 1's audio
+data/<book_folder>/2/session2.ogg    # session 2's audio
+...
+```
+Session folders just need to be named `1`, `2`, `3`, ... A session folder can
+optionally hold its own PDF (e.g. a pre-clipped page range) which the UI will
+prefer over the book-level PDF for that session — but this isn't necessary
+for correctness, see the note on `book_pages_cache` below.
+
 ## Prerequisites
 
 - Python 3.12+ venv with `faster-whisper`, `pymupdf`, `pytesseract`,
@@ -137,27 +151,38 @@ streamlit run src/app.py
 ```
 Opens at `http://localhost:8501`. Then:
 
-1. Upload the book PDF under **Book (PDF)**.
-2. Upload the session recording under **Session audio**.
-3. (Optional) Open **Advanced options** to change:
+1. Pick the **Book** from the dropdown (populated from `data/`).
+2. Check/edit **Book title (Arabic)** and **Author (Arabic)** — pre-filled
+   from `book_info.json` if it exists, else from the book PDF's filename.
+   Saved back to `book_info.json` the first time you run the pipeline for
+   this book, so you only type it once.
+3. Pick the **Session** — sessions are the numbered subfolders
+   (`data/<book>/1`, `2`, ...), labelled with their Arabic ordinal
+   (المجلس الأول, الثاني, ...). The PDF and audio for that session are found
+   automatically: a session-specific PDF if one exists in that folder, else
+   the book-level PDF; the audio file in that session's folder.
+4. (Optional) Open **Advanced options** to change:
    - minimum comment length (default 5 words)
    - Whisper model size (default `large-v3`; smaller sizes are faster but
      less accurate — useful for a quick check before committing to a full
      run)
    - OCR fallback quality threshold (default 0.6)
-4. Click **Run pipeline**. Each stage reports progress in turn (book
+5. Click **Run pipeline**. Each stage reports progress in turn (book
    extraction -> model load -> transcription -> alignment -> per-comment
-   audio clipping) — transcription is the slow part, same as the CLI.
-5. **Review each candidate**: every card shows the book page and audio
+   audio clipping) — transcription is the slow part, same as the CLI. Book
+   extraction is skipped (shows "(cached, instant)") if this exact PDF was
+   already extracted for an earlier session — see caching note below.
+6. **Review each candidate**: every card shows the book page and audio
    timestamp, a player for just that clip (so you can listen and read
    along), an editable text box pre-filled with the extracted text (fix
    anything the transcript got wrong), and a "Keep as a comment" checkbox
    (uncheck it to drop false positives like disfluencies).
-6. Click **Generate PDF report** — it uses whatever is currently in the
+7. Click **Generate PDF report** — it uses whatever is currently in the
    text boxes and checkboxes at that moment, so review everything first.
    A **Download comments_report.pdf** button appears once it's built,
-   showing how many comments were kept.
-7. Download `comments.json`, `transcript.json`, or `book_pages.json` if you
+   showing how many comments were kept. The report is Arabic-only: club
+   name, book title/author/session, and the kept comments.
+8. Download `comments.json`, `transcript.json`, or `book_pages.json` if you
    want the raw (unreviewed) output instead.
 
 The Whisper model stays cached across runs in the same browser session, so
@@ -165,8 +190,23 @@ switching files and re-running doesn't reload it — only changing the model
 size does. Starting a new **Run pipeline** clears any edits/checkboxes and
 generated PDF from the previous run.
 
-Note: file uploads are capped at 500MB (`.streamlit/config.toml`); the full
-book PDF and a full session recording should both fit.
+**Book text caching**: you don't need to clip the book PDF down to each
+session's page range — the diff only pulls out transcript words that don't
+match anywhere in the book, wherever in the book they match, so handing it
+the full book every time is fine. To avoid re-running (possibly slow) OCR
+on the full book for every session, extraction results are cached next to
+the PDF as a hidden `.<pdf-name>_pages_cache.json` file, keyed on the PDF's
+modification time and the quality threshold — so the first session for a
+book pays the extraction cost once, every session after that is instant.
+Delete that file (or touch/replace the PDF) to force re-extraction.
+
+**Nothing is saved to disk automatically.** All results (pages, transcript,
+comments, audio clips, generated PDF) live only in the browser session's
+in-memory state while the server process is running. If you close/restart
+the server (or lose the session) before clicking one of the download
+buttons, the results are gone and you'd have to re-run the whole pipeline.
+Always download at least `comments.json` (enough to regenerate the PDF
+later) before stopping the server.
 
 ## Output format
 
