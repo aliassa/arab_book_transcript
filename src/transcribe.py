@@ -19,7 +19,12 @@ MODEL_SIZE = "large-v3"
 
 
 def load_model(model_size: str = MODEL_SIZE) -> WhisperModel:
-    return WhisperModel(model_size, device="auto", compute_type="auto")
+    # Pinned to "cpu", not "auto": this machine's NVIDIA driver is installed
+    # at the OS level (outside this repo), so "auto" would detect the GPU
+    # and pick it -- but GPU transcription reproducibly OOMs partway through
+    # a real ~30-60min session on this 4GB card (see the gpu-acceleration
+    # branch for the abandoned attempt), so CPU is the reliable choice here.
+    return WhisperModel(model_size, device="cpu", compute_type="auto")
 
 
 def transcribe(audio_path: str, model_size: str = MODEL_SIZE, model: WhisperModel | None = None) -> dict:
