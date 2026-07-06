@@ -94,14 +94,9 @@ python3 src/transcribe.py <audio_file> [output.json]
 ```
 Runs faster-whisper (`large-v3`, Arabic, word-level timestamps, VAD on).
 **First run downloads the ~3GB model from Hugging Face** — needs internet
-once, then it's cached locally. This machine has an NVIDIA GPU (4GB VRAM),
-and `load_model()` uses `device="auto"`, so transcription runs on GPU and is
-several times faster than CPU — `large-v3` peaks around ~2.8GB VRAM, well
-under the 4GB limit. The GPU runtime libs (cuBLAS/cuDNN) come from the
-`nvidia-cublas-cu12`/`nvidia-cudnn-cu12` pip packages in `requirements.txt`;
-`transcribe.py` preloads them itself (see `_preload_cuda_libs`), so no
-`LD_LIBRARY_PATH` setup is needed. Run long sessions in the background
-anyway:
+once, then it's cached locally. On this machine (CPU only, no GPU), expect
+roughly real-time-or-slower: a ~1hr session can take a couple of hours.
+Run long ones in the background:
 ```bash
 nohup python3 src/transcribe.py data/full_session.ogg output/full_transcript.json &
 ```

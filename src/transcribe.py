@@ -9,44 +9,13 @@ signal for distinguishing reader comments from book text being read aloud.
 Output: JSON with the full text plus segment/word-level timestamps.
 """
 
-import ctypes
-import glob
 import json
-import os
 import sys
 from pathlib import Path
 
 from faster_whisper import WhisperModel
 
 MODEL_SIZE = "large-v3"
-
-
-def _preload_cuda_libs() -> None:
-    """Preload cuBLAS/cuDNN from pip's nvidia-*-cu12 wheels, if installed.
-
-    ctranslate2 dlopens these by soname only when it actually runs on GPU
-    (not at model construction), and on a machine with no system CUDA
-    toolkit the shared libs only exist inside the pip packages'
-    site-packages dirs. Setting LD_LIBRARY_PATH from Python is too late —
-    glibc's dynamic linker snapshots it at process start — so instead we
-    dlopen the files directly with RTLD_GLOBAL, which satisfies ctranslate2's
-    later dlopen-by-soname lookup regardless of search path.
-    """
-    try:
-        import nvidia.cublas
-        import nvidia.cudnn
-    except ImportError:
-        return
-    for pkg_module in (nvidia.cublas, nvidia.cudnn):
-        lib_dir = os.path.join(next(iter(pkg_module.__path__)), "lib")
-        for so_path in sorted(glob.glob(os.path.join(lib_dir, "*.so*"))):
-            try:
-                ctypes.CDLL(so_path, mode=ctypes.RTLD_GLOBAL)
-            except OSError:
-                pass
-
-
-_preload_cuda_libs()
 
 
 def load_model(model_size: str = MODEL_SIZE) -> WhisperModel:
