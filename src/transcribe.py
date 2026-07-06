@@ -48,6 +48,15 @@ def _preload_cuda_libs() -> None:
 
 _preload_cuda_libs()
 
+# ctranslate2's default CUDA allocator ("cub_caching") retains freed blocks
+# in a growing cache instead of returning them to the driver, so VRAM climbs
+# over the course of a long session's many sequential segment decodes until
+# it OOMs on this machine's 4GB card -- reproducibly around the same point
+# in a given recording, regardless of beam_size. cuda_malloc_async uses
+# CUDA's own stream-ordered pool allocator, which does release memory
+# between calls, keeping steady-state VRAM bounded for long sessions.
+os.environ.setdefault("CT2_CUDA_ALLOCATOR", "cuda_malloc_async")
+
 
 def load_model(model_size: str = MODEL_SIZE) -> WhisperModel:
     return WhisperModel(model_size, device="auto", compute_type="auto")
@@ -62,6 +71,12 @@ def transcribe(audio_path: str, model_size: str = MODEL_SIZE, model: WhisperMode
         language="ar",
         word_timestamps=True,
         vad_filter=True,
+        # faster-whisper's default beam_size=5 multiplies decoder VRAM ~5x
+        # per segment; on this machine's 4GB GPU that's fine for short clips
+        # but OOMs partway through a real ~30-60min session. beam_size=2
+        # trades a small amount of decode accuracy for enough headroom to
+        # survive a full session on GPU.
+        beam_size=2,
     )
 
     segments_out = []

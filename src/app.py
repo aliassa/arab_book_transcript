@@ -47,9 +47,21 @@ st.markdown(
 )
 
 
-@st.cache_resource(show_spinner=False)
+# Plain module-level dict, not st.cache_resource: cache_resource keeps one
+# entry per distinct model_size forever, so switching sizes within a single
+# server run stacks multiple models' VRAM instead of releasing the old one --
+# fine on CPU RAM, but enough to OOM this machine's 4GB GPU. This holds at
+# most one model at a time, dropping the previous one (and its GPU memory)
+# before loading a different size.
+_model_slot: dict = {}
+
+
 def cached_model(model_size: str):
-    return load_model(model_size)
+    if _model_slot.get("size") != model_size:
+        _model_slot.clear()
+        _model_slot["model"] = load_model(model_size)
+        _model_slot["size"] = model_size
+    return _model_slot["model"]
 
 
 def format_ts(seconds: float) -> str:
@@ -240,7 +252,7 @@ estimated_seconds = None
 if audio_path is not None:
     audio_duration = probe_duration(audio_path)
     if audio_duration:
-        overhead = 0 if model_size in st.session_state.get("loaded_models", set()) else MODEL_LOAD_OVERHEAD_S
+        overhead = 0 if st.session_state.get("loaded_model_size") == model_size else MODEL_LOAD_OVERHEAD_S
         estimated_seconds = audio_duration * SPEED_MULTIPLIER.get(model_size, 1.0) + overhead
         with st.container(border=True):
             st.metric(
@@ -278,7 +290,7 @@ if run:
 
     with st.status("Loading Whisper model...") as status:
         model = cached_model(model_size)
-        st.session_state.setdefault("loaded_models", set()).add(model_size)
+        st.session_state["loaded_model_size"] = model_size
         status.update(label=f"Model ready ({model_size})", state="complete")
 
     with st.status("Transcribing audio (this can take a while)...") as status:
