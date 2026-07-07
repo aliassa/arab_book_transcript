@@ -57,6 +57,14 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    `vad_filter=True`. `load_model()` is split out from `transcribe()`
    specifically so the UI can cache the model across runs
    (`st.cache_resource`) instead of reloading it every time.
+   `clip_timestamps` (default `"0"`, i.e. the whole file) is
+   faster-whisper's own `"start,end"` seconds-range syntax passed straight
+   through — used by the UI's testing mode to transcribe just the first N
+   minutes. Returned timestamps stay absolute against the *original* file
+   regardless, so nothing downstream needs to know a clip was requested;
+   this is a lighter alternative to HOWTO.md's manual ffmpeg-clip workflow
+   since it needs no separate clipped audio file. Note: faster-whisper
+   ignores `vad_filter` whenever a real clip range is given.
 
 3. **`normalize.py`** — canonicalizes Arabic text before comparison: strips
    tashkeel/tatweel, unifies alef/hamza/ya/ta-marbuta variants, strips
@@ -72,9 +80,15 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    `insert`/`replace` run of transcript words ≥ `min_words` with no match
    in the book as a candidate comment. Also builds a page-tagged book word
    list (`build_book_words`) so each candidate's page number can be
-   inferred (`infer_page`) from the nearest matched book position around
-   it — comments have no book position of their own since they don't
-   match anything, so the page is a nearest-neighbor guess, not exact.
+   inferred (`infer_page`, via `_anchor_index`) from the nearest matched
+   book position around it — comments have no book position of their own
+   since they don't match anything, so the page is a nearest-neighbor
+   guess, not exact. Each comment also carries `position_in_page`/
+   `page_word_count` (word offset within that page, from the same anchor)
+   and `context_before` (the `CONTEXT_WORDS` book words immediately
+   preceding the gap, empty if the comment precedes any matched book text
+   at all, e.g. an opening remark) so a reviewer isn't left guessing
+   *where* on the page a comment landed.
    `extract_comments_from_transcript(pages, transcript_segments, ...)` is
    the single entry point both CLI and UI call.
 
@@ -136,4 +150,11 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
 - Processing-time estimates (`SPEED_MULTIPLIER` dict) are rough,
   hardware-dependent guesses, calibrated only for `large-v3` on this
   machine's CPU (no GPU) — don't treat them as measured for other model
-  sizes.
+  sizes. They also predate the book-extraction cache above, so the
+  multiplier likely still bakes in OCR time that a cached-book run no
+  longer pays.
+- "Analyze only part of the audio (testing)" (Advanced options) transcribes
+  just the first N minutes via `transcribe()`'s `clip_timestamps`, for
+  quick iteration on a long session without waiting on a full run. The
+  "Estimated time to result" metric reflects the clipped duration
+  (`effective_duration`), not the full file, whenever this is active.

@@ -162,21 +162,32 @@ Opens at `http://localhost:8501`. Then:
    automatically: a session-specific PDF if one exists in that folder, else
    the book-level PDF; the audio file in that session's folder.
 4. (Optional) Open **Advanced options** to change:
-   - minimum comment length (default 5 words)
+   - minimum comment length (default 7 words)
    - Whisper model size (default `large-v3`; smaller sizes are faster but
      less accurate — useful for a quick check before committing to a full
      run)
    - OCR fallback quality threshold (default 0.6)
+   - **Analyze only part of the audio (testing)** — check this and pick a
+     number of minutes to transcribe just the start of the recording
+     instead of the whole thing, to see results in a couple of minutes
+     while you're tuning the other settings. The "Estimated time to
+     result" box updates to reflect the shorter duration. Unlike the
+     manual ffmpeg-clip workflow below, this doesn't create a separate
+     file — just uncheck it to go back to the full recording.
 5. Click **Run pipeline**. Each stage reports progress in turn (book
    extraction -> model load -> transcription -> alignment -> per-comment
    audio clipping) — transcription is the slow part, same as the CLI. Book
    extraction is skipped (shows "(cached, instant)") if this exact PDF was
    already extracted for an earlier session — see caching note below.
-6. **Review each candidate**: every card shows the book page and audio
+6. **Review each candidate**: every card shows the book page (plus roughly
+   which word on the page it falls at, and the book text read right before
+   it, so you don't have to reread the whole page to find it), the audio
    timestamp, a player for just that clip (so you can listen and read
    along), an editable text box pre-filled with the extracted text (fix
    anything the transcript got wrong), and a "Keep as a comment" checkbox
-   (uncheck it to drop false positives like disfluencies).
+   (unchecked by default for short candidates, since those are
+   disproportionately disfluencies — uncheck any others that turn out to
+   be false positives too).
 7. Click **Generate PDF report** — it uses whatever is currently in the
    text boxes and checkboxes at that moment, so review everything first.
    A **Download comments_report.pdf** button appears once it's built,

@@ -10,6 +10,7 @@ Run with: streamlit run app.py
 """
 
 import json
+import math
 import subprocess
 import tempfile
 import time
@@ -235,6 +236,8 @@ if pdf_path is None:
 if audio_path is None:
     st.error(f"No audio file found in `{session_dir}`.")
 
+audio_duration = probe_duration(audio_path) if audio_path is not None else None
+
 with st.expander("Advanced options"):
     min_words = st.slider("Minimum comment length (words)", 3, 15, 7)
     model_size = st.selectbox(
@@ -242,22 +245,42 @@ with st.expander("Advanced options"):
     )
     quality_threshold = st.slider("OCR fallback quality threshold", 0.0, 1.0, 0.6, 0.05)
 
-estimated_seconds = None
-if audio_path is not None:
-    audio_duration = probe_duration(audio_path)
+    clip_minutes = None
     if audio_duration:
-        overhead = 0 if model_size in st.session_state.get("loaded_models", set()) else MODEL_LOAD_OVERHEAD_S
-        estimated_seconds = audio_duration * SPEED_MULTIPLIER.get(model_size, 1.0) + overhead
-        with st.container(border=True):
-            st.metric(
-                "Estimated time to result",
-                format_duration(estimated_seconds),
-                help=(
-                    f"Rough estimate for {format_duration(audio_duration)} of audio "
-                    f"on '{model_size}' running on CPU -- actual time depends on "
-                    "your hardware, this is a ballpark, not a promise."
-                ),
-            )
+        full_minutes = max(1, math.ceil(audio_duration / 60))
+        limit_audio = st.checkbox(
+            "Analyze only part of the audio (testing)",
+            help="Transcribe just the first N minutes instead of the whole "
+            "recording, to see results quickly while testing settings.",
+        )
+        if limit_audio:
+            clip_minutes = st.slider("Minutes to analyze (from the start)", 1, full_minutes, full_minutes)
+
+# clip_timestamps is faster-whisper's own "start,end" range syntax (seconds);
+# passing it through to transcribe() means timestamps come back absolute
+# against the full file, so nothing downstream (audio clipping, page
+# inference) needs to know a clip was used -- no separate clipped audio file
+# needed either, unlike the CLI's manual ffmpeg-clip workflow in HOWTO.md.
+clip_timestamps = "0"
+effective_duration = audio_duration
+if clip_minutes is not None and audio_duration and clip_minutes * 60 < audio_duration:
+    clip_timestamps = f"0,{clip_minutes * 60}"
+    effective_duration = float(clip_minutes * 60)
+
+estimated_seconds = None
+if effective_duration:
+    overhead = 0 if model_size in st.session_state.get("loaded_models", set()) else MODEL_LOAD_OVERHEAD_S
+    estimated_seconds = effective_duration * SPEED_MULTIPLIER.get(model_size, 1.0) + overhead
+    with st.container(border=True):
+        st.metric(
+            "Estimated time to result",
+            format_duration(estimated_seconds),
+            help=(
+                f"Rough estimate for {format_duration(effective_duration)} of audio "
+                f"on '{model_size}' running on CPU -- actual time depends on "
+                "your hardware, this is a ballpark, not a promise."
+            ),
+        )
 
 run = st.button("Run pipeline", type="primary", disabled=not (pdf_path and audio_path))
 
@@ -288,11 +311,14 @@ if run:
         status.update(label=f"Model ready ({model_size})", state="complete")
 
     with st.status("Transcribing audio (this can take a while)...") as status:
-        result = transcribe(str(audio_path), model_size=model_size, model=model)
-        status.update(
-            label=f"Transcribed {result['duration']:.0f}s of audio",
-            state="complete",
+        result = transcribe(
+            str(audio_path), model_size=model_size, model=model, clip_timestamps=clip_timestamps
         )
+        if clip_timestamps != "0":
+            label = f"Transcribed first {clip_minutes} min (testing) of {result['duration']:.0f}s total audio"
+        else:
+            label = f"Transcribed {result['duration']:.0f}s of audio"
+        status.update(label=label, state="complete")
 
     with st.status("Aligning transcript against book text...") as status:
         comments = extract_comments_from_transcript(
@@ -339,10 +365,15 @@ if "comments" in st.session_state:
 
     for i, c in enumerate(comments):
         with st.container(border=True):
+            page_note = f"page {c['page']}"
+            if c.get("position_in_page") and c.get("page_word_count"):
+                page_note += f" (word {c['position_in_page']}/{c['page_word_count']})"
             st.caption(
-                f"page {c['page']} · {format_ts(c['start'])} – {format_ts(c['end'])} "
+                f"{page_note} · {format_ts(c['start'])} – {format_ts(c['end'])} "
                 f"· {c['n_words']} words"
             )
+            if c.get("context_before"):
+                st.caption(f"Text right before: …{c['context_before']}")
             st.audio(clips[i], format="audio/mp3")
             st.text_area(
                 "Comment text",
@@ -366,6 +397,9 @@ if "comments" in st.session_state:
                 "page": c["page"],
                 "start": c["start"],
                 "end": c["end"],
+                "position_in_page": c.get("position_in_page"),
+                "page_word_count": c.get("page_word_count"),
+                "context_before": c.get("context_before"),
             }
             for i, c in enumerate(comments)
             if st.session_state.get(f"keep_{i}", True)

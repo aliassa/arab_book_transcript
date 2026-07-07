@@ -1,4 +1,5 @@
 from align import (
+    _anchor_index,
     _edit_distance_le1,
     _near_duplicate,
     build_book_words,
@@ -143,6 +144,14 @@ def test_infer_page_none_when_no_book_words():
     assert infer_page([], book_start=0, book_end=0) is None
 
 
+def test_anchor_index_matches_infer_page_source_position():
+    word_pages = [1, 1, 2, 2, 3]
+    assert _anchor_index(word_pages, book_start=3, book_end=3) == 2
+    assert word_pages[_anchor_index(word_pages, book_start=3, book_end=3)] == infer_page(
+        word_pages, book_start=3, book_end=3
+    )
+
+
 # -- extract_comments_from_transcript: end to end ----------------------------
 
 
@@ -177,3 +186,70 @@ def test_extract_comments_from_transcript_end_to_end():
     assert c["start"] == 1.0
     assert c["end"] == 3.5
     assert c["page"] == 1
+    # "بسم الله" (2 words) precede the gap on a 4-word page.
+    assert c["position_in_page"] == 2
+    assert c["page_word_count"] == 4
+    assert c["context_before"] == "بسم الله"
+
+
+def test_extract_comments_from_transcript_no_context_before_opening_remark():
+    # Comment happens before any book text has been read at all -- there is
+    # nothing to show as "text before it".
+    pages = [{"page_number": 1, "text": "كلمه1 كلمه2 كلمه3"}]
+    segments = [
+        {
+            "words": [
+                _word("c1", 0.0, 0.5),
+                _word("c2", 0.5, 1.0),
+                _word("c3", 1.0, 1.5),
+                _word("c4", 1.5, 2.0),
+                _word("c5", 2.0, 2.5),
+                _word("كلمه1", 2.5, 3.0),
+                _word("كلمه2", 3.0, 3.5),
+                _word("كلمه3", 3.5, 4.0),
+            ]
+        }
+    ]
+
+    comments = extract_comments_from_transcript(pages, segments, min_words=5)
+
+    assert len(comments) == 1
+    c = comments[0]
+    assert c["page"] == 1
+    assert c["position_in_page"] == 1
+    assert c["page_word_count"] == 3
+    assert c["context_before"] == ""
+
+
+def test_extract_comments_from_transcript_position_in_page_is_per_page_not_global():
+    # The comment falls on page 2, which starts fresh at word 1 -- not
+    # counting page 1's words too.
+    pages = [
+        {"page_number": 1, "text": "كلمه1 كلمه2 كلمه3"},
+        {"page_number": 2, "text": "كلمه4 كلمه5"},
+    ]
+    segments = [
+        {
+            "words": [
+                _word("كلمه1", 0.0, 0.5),
+                _word("كلمه2", 0.5, 1.0),
+                _word("كلمه3", 1.0, 1.5),
+                _word("كلمه4", 1.5, 2.0),
+                _word("c1", 2.0, 2.5),
+                _word("c2", 2.5, 3.0),
+                _word("c3", 3.0, 3.5),
+                _word("c4", 3.5, 4.0),
+                _word("c5", 4.0, 4.5),
+                _word("كلمه5", 4.5, 5.0),
+            ]
+        }
+    ]
+
+    comments = extract_comments_from_transcript(pages, segments, min_words=5)
+
+    assert len(comments) == 1
+    c = comments[0]
+    assert c["page"] == 2
+    assert c["position_in_page"] == 1  # "كلمه4" is the 1st word of page 2
+    assert c["page_word_count"] == 2
+    assert c["context_before"] == "كلمه1 كلمه2 كلمه3 كلمه4"

@@ -8,6 +8,8 @@ reshaping (arabic_reshaper) and bidi reordering (python-bidi) to render
 Arabic legibly at all.
 """
 
+import html
+
 from weasyprint import HTML
 
 CLUB_NAME_AR = "نادي القراء العرب"
@@ -39,30 +41,42 @@ def build_pdf(
     session_number: int | None = None,
 ) -> bytes:
     """
-    comments: list of {text, page, start, end} (n_words ignored if present).
+    comments: list of {text, page, start, end}, optionally with
+    position_in_page/page_word_count (word offset within the page) and
+    context_before (book text read right before the comment) -- both
+    rendered when present, silently omitted otherwise. (n_words ignored
+    if present.)
     Returns PDF file bytes. Report is Arabic-only, RTL throughout.
     """
-    rows = "\n".join(
-        f"""
+
+    def _entry_html(c: dict) -> str:
+        page_meta = f'الصفحة {c["page"]}'
+        if c.get("position_in_page") and c.get("page_word_count"):
+            page_meta += f' (الكلمة {c["position_in_page"]} من {c["page_word_count"]})'
+        context_html = ""
+        if c.get("context_before"):
+            context_html = f'<p class="context">…{html.escape(c["context_before"])}</p>'
+        return f"""
         <div class="entry">
-          <div class="meta">الصفحة {c["page"]} &middot; {format_ts(c["start"])}–{format_ts(c["end"])}</div>
-          <p class="text">{c["text"]}</p>
+          <div class="meta">{page_meta} &middot; {format_ts(c["start"])}–{format_ts(c["end"])}</div>
+          {context_html}
+          <p class="text">{html.escape(c["text"])}</p>
         </div>
         """
-        for c in comments
-    )
+
+    rows = "\n".join(_entry_html(c) for c in comments)
 
     meta_lines = []
     if book_title_ar:
-        meta_lines.append(f'<div class="meta-line">الكتاب: {book_title_ar}</div>')
+        meta_lines.append(f'<div class="meta-line">الكتاب: {html.escape(book_title_ar)}</div>')
     if author_ar:
-        meta_lines.append(f'<div class="meta-line">المؤلف: {author_ar}</div>')
+        meta_lines.append(f'<div class="meta-line">المؤلف: {html.escape(author_ar)}</div>')
     session_label = session_label_ar(session_number)
     if session_label:
         meta_lines.append(f'<div class="meta-line">{session_label}</div>')
     meta_block = "\n".join(meta_lines)
 
-    html = f"""
+    html_doc = f"""
     <html dir="rtl" lang="ar">
     <head>
     <meta charset="utf-8">
@@ -77,6 +91,7 @@ def build_pdf(
       .subtitle {{ font-size: 10pt; color: #666; margin: 10pt 0 24pt; }}
       .entry {{ margin-bottom: 18pt; padding-bottom: 14pt; border-bottom: 0.5pt solid #ccc; }}
       .meta {{ font-size: 9pt; color: #888; margin-bottom: 4pt; }}
+      .context {{ font-size: 10pt; color: #999; font-style: italic; margin: 0 0 4pt; }}
       .text {{ font-size: 14pt; line-height: 1.9; margin: 0; }}
     </style>
     </head>
@@ -88,4 +103,4 @@ def build_pdf(
     </body>
     </html>
     """
-    return HTML(string=html).write_pdf()
+    return HTML(string=html_doc).write_pdf()

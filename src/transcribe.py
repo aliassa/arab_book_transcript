@@ -27,7 +27,21 @@ def load_model(model_size: str = MODEL_SIZE) -> WhisperModel:
     return WhisperModel(model_size, device="cpu", compute_type="auto")
 
 
-def transcribe(audio_path: str, model_size: str = MODEL_SIZE, model: WhisperModel | None = None) -> dict:
+def transcribe(
+    audio_path: str,
+    model_size: str = MODEL_SIZE,
+    model: WhisperModel | None = None,
+    clip_timestamps: str = "0",
+) -> dict:
+    """
+    clip_timestamps: faster-whisper's "start,end,start,end,..." (seconds)
+    range(s) to process, default "0" meaning the whole file. Lets a caller
+    transcribe only a slice (e.g. the UI's testing mode, to see results in
+    minutes instead of waiting on a full ~1hr session) without needing to
+    cut a separate audio file first -- returned timestamps stay absolute
+    against the original file either way. vad_filter is ignored by
+    faster-whisper whenever a real clip range is given.
+    """
     if model is None:
         model = load_model(model_size)
 
@@ -36,6 +50,7 @@ def transcribe(audio_path: str, model_size: str = MODEL_SIZE, model: WhisperMode
         language="ar",
         word_timestamps=True,
         vad_filter=True,
+        clip_timestamps=clip_timestamps,
     )
 
     segments_out = []

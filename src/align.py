@@ -31,6 +31,11 @@ from normalize import tokenize
 
 MIN_COMMENT_WORDS = 5
 
+# How many book words immediately preceding a comment's gap to surface as
+# orientation context (so a reviewer doesn't have to reread the whole page
+# to find where in it the reader digressed).
+CONTEXT_WORDS = 12
+
 
 @dataclass
 class Comment:
@@ -60,19 +65,25 @@ def build_book_words(pages: list[dict]) -> tuple[list[str], list[int]]:
     return words, word_pages
 
 
-def infer_page(word_pages: list[int], book_start: int, book_end: int) -> int | None:
+def _anchor_index(word_pages: list[int], book_start: int, book_end: int) -> int | None:
     """
     A comment sits in a gap between matched book positions, so there's no
-    book word "at" the gap to read a page off of directly. Use the page of
-    the book word just before the gap (where the reader was when they
-    digressed); fall back to the word just after (comment before any book
-    text has matched yet, e.g. an opening remark) or the last known page.
+    book word "at" the gap to anchor it to directly. Anchor to the book word
+    just before the gap (where the reader was when they digressed); fall
+    back to the word just after (comment before any book text has matched
+    yet, e.g. an opening remark), or the last known word, or None if the
+    book has no words at all.
     """
     if book_start > 0:
-        return word_pages[book_start - 1]
+        return book_start - 1
     if book_end < len(word_pages):
-        return word_pages[book_end]
-    return word_pages[-1] if word_pages else None
+        return book_end
+    return len(word_pages) - 1 if word_pages else None
+
+
+def infer_page(word_pages: list[int], book_start: int, book_end: int) -> int | None:
+    idx = _anchor_index(word_pages, book_start, book_end)
+    return word_pages[idx] if idx is not None else None
 
 
 def _edit_distance_le1(a: str, b: str) -> bool:
@@ -173,6 +184,15 @@ def extract_comments_from_transcript(
     """
     book_words, book_word_pages = build_book_words(pages)
 
+    # First/last-exclusive book-word index of each page, so a comment's
+    # position within its page can be reported (not just the page number).
+    # Pages are contiguous runs in book_word_pages since build_book_words
+    # appends page-by-page, so one pass is enough.
+    page_spans: dict[int, list[int]] = {}
+    for idx, pg in enumerate(book_word_pages):
+        span = page_spans.setdefault(pg, [idx, idx + 1])
+        span[1] = idx + 1
+
     # Flatten transcript into a single word list, keeping a parallel list
     # of (start, end) timestamps per normalized word.
     transcript_words: list[str] = []
@@ -196,13 +216,35 @@ def extract_comments_from_transcript(
     for c in candidates:
         start_ts = timestamps[c.word_start][0]
         end_ts = timestamps[c.word_end - 1][1]
+
+        anchor = _anchor_index(book_word_pages, c.book_start, c.book_end)
+        page = book_word_pages[anchor] if anchor is not None else None
+
+        position_in_page = None
+        page_word_count = None
+        if anchor is not None:
+            span_start, span_end = page_spans[page]
+            position_in_page = anchor - span_start + 1  # 1-indexed
+            page_word_count = span_end - span_start
+
+        # Text read right before the gap, for orientation -- distinct from
+        # the anchor above, which can point *after* the gap (opening-remark
+        # case) where there is nothing before to show.
+        context_before = ""
+        if c.book_start > 0:
+            context_start = max(0, c.book_start - CONTEXT_WORDS)
+            context_before = " ".join(book_words[context_start:c.book_start])
+
         comments.append(
             {
                 "text": c.text,
                 "n_words": c.n_words,
                 "start": round(start_ts, 3),
                 "end": round(end_ts, 3),
-                "page": infer_page(book_word_pages, c.book_start, c.book_end),
+                "page": page,
+                "position_in_page": position_in_page,
+                "page_word_count": page_word_count,
+                "context_before": context_before,
             }
         )
     return comments
