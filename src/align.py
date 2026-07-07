@@ -75,6 +75,38 @@ def infer_page(word_pages: list[int], book_start: int, book_end: int) -> int | N
     return word_pages[-1] if word_pages else None
 
 
+def _edit_distance_le1(a: str, b: str) -> bool:
+    """True if a and b differ by at most one character (substitution,
+    insertion, or deletion) -- the shape of a typical single-character OCR
+    misread (e.g. the Arabic dot-count confusion ت/ث)."""
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:
+        return sum(1 for x, y in zip(a, b) if x != y) == 1
+    shorter, longer = (a, b) if la < lb else (b, a)
+    i = j = skipped = 0
+    while i < len(shorter) and j < len(longer):
+        if shorter[i] == longer[j]:
+            i += 1
+            j += 1
+        else:
+            skipped += 1
+            if skipped > 1:
+                return False
+            j += 1
+    return True
+
+
+def _near_duplicate(w1: str, w2: str) -> bool:
+    """Fuzzy word match tolerant of a single OCR-noise character, gated on
+    length so short function words (e.g. 2-letter prepositions) don't
+    false-match each other."""
+    return len(w1) >= 3 and len(w2) >= 3 and _edit_distance_le1(w1, w2)
+
+
 def extract_candidates(
     book_words: list[str],
     transcript_words: list[str],
@@ -91,6 +123,21 @@ def extract_candidates(
     for tag, a1, a2, b1, b2 in matcher.get_opcodes():
         if tag not in ("insert", "replace"):
             continue
+
+        # A single OCR-garbled book word (e.g. "مررث" for "مررت") never
+        # matches its correctly-spoken transcript counterpart, so the whole
+        # unmatched run around it collapses into one replace block -- which
+        # can drag a word or two of real book text in at the edges (typically
+        # the reader re-reading a line to re-anchor after a digression).
+        # Fuzzy-trim boundary words that are near-duplicates of the book
+        # word they're paired against back out of the candidate.
+        while a1 < a2 and b1 < b2 and _near_duplicate(book_words[a1], transcript_words[b1]):
+            a1 += 1
+            b1 += 1
+        while a2 > a1 and b2 > b1 and _near_duplicate(book_words[a2 - 1], transcript_words[b2 - 1]):
+            a2 -= 1
+            b2 -= 1
+
         n_words = b2 - b1
         if n_words < min_words:
             continue

@@ -21,10 +21,15 @@ python3 src/transcribe.py <audio> [out.json]    # downloads ~3GB model on first 
 python3 src/align.py <book_pages.json> <transcript.json> [page_number] > comments.json
 
 streamlit run src/app.py                        # UI: upload, run, review, export PDF
+
+pytest                                           # unit tests (tests/), no fixtures needed
 ```
 
-There is no test suite, linter, or build step — this is a small pipeline
-project, verified by running it against real sample data (see `data/` and
+There is no linter or build step. `pytest` covers the pure-logic pieces
+(`normalize.py`, `align.py`, `extract_book.py`'s `text_quality_score`,
+`export_pdf.py`) with synthetic fixtures — it does not cover `transcribe.py`
+(needs the real Whisper model) or `app.py` (Streamlit UI), which stay
+verified by running the pipeline against real sample data (see `data/` and
 `output/` for a validated sample pair: `sample_pages.pdf` /
 `sample_audio_2.ogg` / `output/sample_audio_2_comments.json`).
 
@@ -84,7 +89,12 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
 - **Boundary fuzziness**: if the reader repeats a book line before/after a
   digression (common, to re-anchor themselves), the diff can only match
   the book's single occurrence to *one* of the transcript's two, folding
-  a few extra words into the comment span.
+  a few extra words into the comment span. `extract_candidates` fuzzy-trims
+  boundary words that are a single-character edit away from the adjacent
+  book word (`_near_duplicate`), which fixes the common case where this is
+  caused by an OCR misread (e.g. "مررث" for "مررت") rather than genuine
+  ambiguity — but doesn't help when the repeated line was transcribed or
+  OCR'd cleanly and the ambiguity is real.
 - **Disfluencies as false positives**: a stumble/self-correction while
   reading has the same "unmatched run of words" shape as a real comment.
 - Both are why the UI has a manual review step (listen, edit text,
