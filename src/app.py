@@ -40,6 +40,12 @@ SPEED_MULTIPLIER = {
 }
 MODEL_LOAD_OVERHEAD_S = 20  # rough fixed cost the first time a size is loaded
 
+# Short candidates are disproportionately disfluencies/false positives (see
+# CLAUDE.md's "known algorithmic limitations") -- still shown for review
+# since they might be real, but pre-unchecked so reviewing a run means
+# mostly *checking* the long ones rather than *unchecking* the short ones.
+DEFAULT_UNCHECKED_BELOW_WORDS = 10
+
 st.set_page_config(page_title="Reading Club — Comment Extractor", layout="centered")
 st.markdown(
     "<style>.stTextArea textarea { direction: rtl; text-align: right; font-size: 1.1rem; }</style>",
@@ -230,7 +236,7 @@ if audio_path is None:
     st.error(f"No audio file found in `{session_dir}`.")
 
 with st.expander("Advanced options"):
-    min_words = st.slider("Minimum comment length (words)", 3, 15, 5)
+    min_words = st.slider("Minimum comment length (words)", 3, 15, 7)
     model_size = st.selectbox(
         "Whisper model size", MODEL_SIZES, index=MODEL_SIZES.index(MODEL_SIZE)
     )
@@ -345,7 +351,11 @@ if "comments" in st.session_state:
                 height=100,
                 label_visibility="collapsed",
             )
-            st.checkbox("Keep as a comment", value=True, key=f"keep_{i}")
+            st.checkbox(
+                "Keep as a comment",
+                value=c["n_words"] >= DEFAULT_UNCHECKED_BELOW_WORDS,
+                key=f"keep_{i}",
+            )
 
     st.divider()
 
