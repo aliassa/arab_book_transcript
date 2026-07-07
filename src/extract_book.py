@@ -60,8 +60,13 @@ def ocr_page(page: "fitz.Page", dpi: int = 300) -> str:
     """Render page to image and OCR it with Tesseract (Arabic model)."""
     pix = page.get_pixmap(dpi=dpi)
     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-    # psm 6: assume a uniform block of text -- generally good for book pages.
-    config = "--psm 6"
+    # psm 4 (column of variable-sized text), not 6 (uniform block): book pages
+    # here mix a decorative header/logo line with body paragraphs, and psm 6's
+    # "uniform block" assumption measurably degrades word-level accuracy on
+    # that mixed layout -- confirmed by comparing OCR output against several
+    # page images by eye (e.g. "قامومي"/"والحهد" under psm 6 vs correctly
+    # "قاموسي"/"والجهد" under psm 4 for the same source image).
+    config = "--psm 4"
     return pytesseract.image_to_string(img, lang="ara", config=config)
 
 
