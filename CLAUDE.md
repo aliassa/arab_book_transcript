@@ -27,7 +27,10 @@ pytest                                           # unit tests (tests/), no fixtu
 
 There is no linter or build step. `pytest` covers the pure-logic pieces
 (`normalize.py`, `align.py`, `extract_book.py`'s `text_quality_score`,
-`export_pdf.py`) with synthetic fixtures — it does not cover `transcribe.py`
+`export_pdf.py`, `export_annotated_pdf.py`) with synthetic fixtures —
+`export_annotated_pdf.py`'s own PDF-building smoke tests use a tiny
+in-memory PDF with real selectable text (`"direct"` method) specifically
+to avoid needing Tesseract/OCR in the test suite — it does not cover `transcribe.py`
 (needs the real Whisper model) or `app.py` (Streamlit UI), which stay
 verified by running the pipeline against real sample data (see `data/` and
 `output/` for a validated sample pair: `sample_pages.pdf` /
@@ -72,13 +75,31 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    Note: Arabic punctuation (، ؛ ؟ etc.) sits inside the main Arabic
    Unicode block, so it must be stripped by an explicit punctuation regex
    *before* the generic "keep anything in the Arabic block" filter, or it
-   leaks through as if it were a letter.
+   leaks through as if it were a letter. The alef/hamza/ya unification step
+   is essential for matching (OCR and Whisper disagree on these letters
+   constantly) but produces wrong-looking *output* text (`أ/إ/آ`→`ا`,
+   `ى/ئ`→`ي`, etc.), so `tokenize_display()` runs the same tokenization
+   minus that one step, staying word-for-word aligned with `tokenize()`'s
+   output (the other steps are 1:1 substitutions/removals that don't shift
+   word boundaries) — `align.py` uses `tokenize()` for matching and
+   `tokenize_display()` to build the text a reviewer actually reads.
 
 4. **`align.py`** — the core comment-extraction logic. Treats book words as
    the reference sequence and transcript words as the hypothesis, runs
    `difflib.SequenceMatcher` (word-level LCS diff), and treats any
    `insert`/`replace` run of transcript words ≥ `min_words` with no match
-   in the book as a candidate comment. Also builds a page-tagged book word
+   in the book as a candidate comment. `SequenceMatcher` searches the
+   *entire* book (tens of thousands of words), so a comment that happens to
+   use a common word or short phrase can spuriously "match" an unrelated
+   occurrence of it elsewhere in the book, splitting one continuous comment
+   into fragments each mis-anchored to whatever random page the coincidence
+   landed on — `_merge_short_gaps` folds `equal` runs of at most
+   `MAX_NOISE_GAP_WORDS` back into the surrounding candidate whenever the
+   chain (short matches and skipped/`delete` book text) eventually leads
+   back to real transcript content, i.e. it's actually sandwiched rather
+   than a genuine anchor; `autojunk=True` (difflib's default) is
+   complementary insurance for single words that recur very often in the
+   transcript itself. Also builds a page-tagged book word
    list (`build_book_words`) so each candidate's page number can be
    inferred (`infer_page`, via `_anchor_index`) from the nearest matched
    book position around it — comments have no book position of their own
@@ -97,6 +118,50 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    correctly out of the box, where reportlab would need manual
    `arabic_reshaper` + `python-bidi` handling to avoid rendering broken
    disconnected glyphs.
+
+6. **`export_annotated_pdf.py`** (UI-only) — a reviewer found a separate
+   summary document impractical to actually use while reading, so this
+   overlays reviewed comments directly onto the book's own PDF pages
+   instead: a small numbered marker at each comment's anchor word (the
+   same word `align.py` already anchors it to via `position_in_page` —
+   this makes that anchor *visible*, not any more accurate than what
+   `align.py` computed), plus the comment text either appended in new
+   whitespace at the bottom of that page (`style="bottom"`, text gets
+   truncated past `BOTTOM_TRUNCATE_CHARS` since a page-bottom strip is
+   tight) or on a new page inserted right after it (`style="inserted"`,
+   no truncation, at the cost of the book's page count growing). Comments
+   are numbered sequentially across the whole book, not restarted per
+   page. Placing the marker needs each anchor word's *pixel* position,
+   which `extract_book.py` never captures (it only keeps flat page text)
+   — `_page_word_boxes` re-derives word boxes per commented page on
+   export (PyMuPDF `get_text("words")` for `"direct"` pages, Tesseract
+   `image_to_data` for OCR'd ones), an approximation of where
+   `position_in_page` points since Tesseract's word segmentation here
+   isn't guaranteed identical to the `image_to_string` call
+   `extract_book.py` used to build the page text that index was computed
+   against. Overlay text is rendered via WeasyPrint into a same-size
+   single-page PDF and embedded onto the target page with `show_pdf_page`
+   (`_embed_html`), rather than PyMuPDF's own `insert_htmlbox`: both shape
+   Arabic correctly on screen, but `insert_htmlbox`'s output embeds a
+   broken text layer for it — visually right, but `page.search_for()`
+   finds nothing even for text plainly visible on the page (confirmed
+   empirically after a whole-book export looked fine on screen but
+   wasn't searchable/copyable) — while WeasyPrint's is properly
+   extractable, matching `export_pdf.py`'s already-proven choice. Two
+   bidi quirks confirmed empirically in *both* engines: combining Arabic
+   text/numerals and a hyphenated Western timestamp range (e.g.
+   "0:00-5:13") in one RTL paragraph reorders the range's two halves, so
+   page-label and timestamp are always two separate `_embed_html` calls
+   (`_meta_html_pair`), never one paragraph — a plain Arabic session label
+   (`export_pdf.session_label_ar`, e.g. "المجلس التاسع") has no such range
+   in it, so it's safe to fold into the page-label box instead of needing
+   a third box. `_draw_marker` centers the marker *above* the anchor
+   word's own width, not offset past either edge: offsetting sideways
+   only has guaranteed clearance for a word at a line's start/end (open
+   margin next to it) — a word in the middle of a line, the common case,
+   has another word right up against it, and a sideways offset lands on
+   top of it (found by spot-checking a real generated whole-book PDF:
+   a marker ended up overlapping the two words either side of it).
 
 ### Known algorithmic limitations (not bugs — see `HOWTO.md`)
 
@@ -137,16 +202,84 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
   mtime + `quality_threshold`, since the same book PDF is reused across
   every session and OCR is the expensive part — without this, extraction
   would silently re-run (and re-OCR) on every single session.
-- `book_info.json` in the book folder holds `{title_ar, author_ar}` for the
-  Arabic PDF report (`export_pdf.py`); defaults to the book PDF's filename
-  stem if absent, and gets written back to disk on every pipeline run so
-  the user only types it once per book.
-- Nothing produced by a run (other than the two caches above) is ever
-  written to disk — results only exist in `st.session_state` for the life
-  of the server process. If the user closes/restarts the server before
-  using one of the download buttons (`comments.json`/`transcript.json`/
-  `book_pages.json`/PDF), the run's output is unrecoverable and must be
-  regenerated (extraction will be instant via cache; transcription won't).
+- `book_info.json` in the book folder holds `{title_ar, author_ar,
+  page_offset}` for the Arabic PDF report (`export_pdf.py`); `title_ar`
+  defaults to the book PDF's filename stem if absent, and the file gets
+  written back to disk on every pipeline run so the user only types it
+  once per book. `page_offset` corrects for `align.py`/`extract_book.py`
+  working in physical-PDF-page-index space, which is usually behind the
+  book's own printed page numbers by however many front-matter pages
+  (cover, table of contents, preface...) precede the book's page 1 —
+  a fixed, book-specific value the user sets once by comparing a known
+  printed page number against its PDF page index. Purely a display/export
+  transform — the alignment logic itself never knows about it and keeps
+  working in raw PDF-page space, which is what it can actually infer from
+  the book text. `st.session_state["comments"]` also stays in that raw
+  space always (never mutated with the offset baked in) — the shift to
+  `comment["page"] += page_offset` happens fresh, reading the "Page
+  offset" field's *live* value, at every point comments get displayed or
+  exported (the review list, `comments.json`, both per-session annotated-
+  PDF buttons, the whole-book one). This is deliberate, not an
+  optimization: an earlier version applied the offset once at Run/Resume
+  time and stored the result, which meant correcting the field after
+  noticing it was wrong silently did nothing until the user re-ran or
+  re-resumed — surprising, since it looks like any other live input.
+  Keeping the stored copy always raw and re-applying the live offset on
+  every rerun makes the field actually live, and is also *why* raw is what
+  gets saved to `.run_state.json` in the first place (see below) rather
+  than an offset-applied copy.
+- A run's transcript+comments are no longer memory-only: `save_run_state`
+  writes them to a hidden `.run_state.json` in the *session* folder (not
+  the book folder — this is per-session, unlike the book-level pages
+  cache) right after alignment completes, before the (comparatively cheap)
+  audio-clip-extraction step. This is deliberately the single costliest
+  thing to lose — CPU-only transcription of an hour-long session takes
+  much longer than everything else in the pipeline combined. Reviewer
+  edits (`keep_{i}`/`text_{i}` widget state) are snapshotted separately to
+  `.review_state.json` on every script rerun (i.e. every checkbox/text
+  change, since Streamlit reruns top-to-bottom on each interaction) via
+  `save_review_state` — kept in a separate file from the transcript so
+  editing one comment's text doesn't rewrite the whole (potentially large)
+  transcript each time. If a `.run_state.json` exists for the selected
+  session, a "Resume saved run" button appears next to "Run pipeline";
+  resuming reloads the saved transcript/comments (skipping re-transcription
+  and re-alignment entirely) plus any saved review edits, and only redoes
+  the cheap steps (page-cache lookup, audio clipping). `comments.json`/
+  `transcript.json`/`book_pages.json`/PDF are still separate, explicit
+  downloads for taking results *out* of the tool — the two state files
+  above are an internal safety net, not meant to be consumed directly.
+- "Whole-book annotated PDF" (its own expander) sweeps every numbered
+  session folder under the selected book, not just the one picked above —
+  split into one processing step and two independent render steps, since
+  processing (slow, style-agnostic) and rendering (fast, style-specific)
+  are different concerns; an earlier version bundled both into two
+  "Process all sessions" buttons, one per style, which re-swept every
+  session (redundantly, if slowly-cheaply thanks to `ensure_session_run`'s
+  own caching) just to produce the other style.
+  - **Process all sessions**: `ensure_session_run` reuses a session's
+    `.run_state.json` if it has one, otherwise transcribes+aligns it right
+    there (this is the one place outside the main "Run pipeline" flow
+    that calls `transcribe`, and is why this can take a very long time —
+    CPU-only transcription of several un-processed long sessions, run
+    serially with a `st.status` per session so progress is visible).
+    `load_reviewed_comments_for_session` then reconstructs each session's
+    kept+edited comments straight from its saved `.run_state.json`/
+    `.review_state.json` on disk — a session with no `.review_state.json`
+    yet (never manually reviewed) falls back to the same "keep candidates
+    ≥ `DEFAULT_UNCHECKED_BELOW_WORDS`" default the live review UI itself
+    starts with. `load_reviewed_comments_for_book` concatenates every
+    session's list and sorts by page (then session number, then start
+    time), and is called with `page_offset=0` — kept raw in
+    `st.session_state["whole_book_comments"]` for the same live-reactivity
+    reason `st.session_state["comments"]` is (see above), so correcting
+    "Page offset" afterward doesn't require re-processing, just
+    re-rendering.
+  - **Generate PDF (bottom of page)/(separate page)**: apply the *live*
+    page_offset to a copy of the collected raw comments and call
+    `export_annotated_pdf.build_annotated_pdf` against the book-level PDF
+    — comments from different sessions covering the same page interleave
+    in page order rather than being grouped by session. Each can be
+    clicked independently, any number of times, without re-processing.
 - Processing-time estimates (`SPEED_MULTIPLIER` dict) are rough,
   hardware-dependent guesses, calibrated only for `large-v3` on this
   machine's CPU (no GPU) — don't treat them as measured for other model

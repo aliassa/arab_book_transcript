@@ -193,8 +193,34 @@ Opens at `http://localhost:8501`. Then:
    A **Download comments_report.pdf** button appears once it's built,
    showing how many comments were kept. The report is Arabic-only: club
    name, book title/author/session, and the kept comments.
+
+   A separate report isn't the only option: **Generate annotated PDF
+   (bottom of page)** and **Generate annotated PDF (separate page)**
+   overlay the same kept/edited comments directly onto the book's own PDF
+   instead — a small numbered marker at the spot each comment was made,
+   with the comment text either in new whitespace at the bottom of that
+   page (long comments get truncated to fit) or on a whole new page
+   inserted right after it (no truncation, but the book's page count
+   grows). Both need the book's actual PDF, so they're disabled if it
+   can't be found.
 8. Download `comments.json`, `transcript.json`, or `book_pages.json` if you
    want the raw (unreviewed) output instead.
+
+Both annotated-PDF buttons only cover the one session picked above. To get
+every session's comments onto one annotated copy of the whole book, open
+the **Whole-book annotated PDF (all sessions)** section (below the main
+pipeline, works regardless of which session is currently selected). It's
+two steps: click **Process all sessions** first — it transcribes and
+aligns any session that's never been run yet (reusing saved results for
+ones that already have been, including your manual review edits), showing
+progress one session at a time. This can take a very long time if several
+sessions haven't been processed before — transcription is the slow part
+and there's no shortcut around doing it for each session's audio — so
+start it and leave it running rather than waiting on it. Once it's done
+(or if every session was already processed, which is instant), click
+**Generate PDF (bottom of page)** or **(separate page)** to render the
+combined result — either or both, and as many times as you like (e.g.
+after nudging "Page offset") without repeating the slow processing step.
 
 The Whisper model stays cached across runs in the same browser session, so
 switching files and re-running doesn't reload it — only changing the model
@@ -211,13 +237,23 @@ modification time and the quality threshold — so the first session for a
 book pays the extraction cost once, every session after that is instant.
 Delete that file (or touch/replace the PDF) to force re-extraction.
 
-**Nothing is saved to disk automatically.** All results (pages, transcript,
-comments, audio clips, generated PDF) live only in the browser session's
-in-memory state while the server process is running. If you close/restart
-the server (or lose the session) before clicking one of the download
-buttons, the results are gone and you'd have to re-run the whole pipeline.
-Always download at least `comments.json` (enough to regenerate the PDF
-later) before stopping the server.
+**A run's transcript and comments are saved automatically** to a hidden
+`.run_state.json` in the session folder as soon as alignment finishes —
+before the (comparatively cheap) audio-clipping step, so the expensive
+part (transcription) survives a server restart even if you never click a
+download button. Your review edits (checkbox/text changes) are also
+autosaved continuously to `.review_state.json` in the same folder as you
+go, and the review screen shows a running "N/M marked keep" count so you
+can see that progress is being captured, not just at the end. If a saved
+run exists for the session you pick, a **Resume saved run** button appears
+next to **Run pipeline** — it reloads the saved transcript/comments (and
+any review edits) without re-transcribing or re-aligning.
+
+Generated PDFs and audio clips themselves still aren't saved anywhere —
+only `comments.json`/`transcript.json`/`book_pages.json`/the PDF, via their
+download buttons, get you a copy outside the tool. The two hidden state
+files above are an internal safety net for resuming work in the UI, not
+meant to be opened directly.
 
 ## Output format
 

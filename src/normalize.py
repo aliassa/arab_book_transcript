@@ -48,12 +48,25 @@ ARABIC_PUNCT_RE = re.compile(r"[،؛؟٪﴾﴿ﷺ«»]")
 KEEP_RE = re.compile(r"[^؀-ۿݐ-ݿﭐ-﻿a-zA-Z0-9\s]")
 
 
-def normalize_text(text: str) -> str:
-    """Canonicalize Arabic text for cross-source comparison (not for display)."""
+def normalize_text(text: str, unify_letters: bool = True) -> str:
+    """Canonicalize Arabic text for cross-source comparison (not for display).
+
+    `unify_letters` controls the CHAR_MAP step (alef/hamza/ya/ta-marbuta
+    variants collapsed to one form each) -- essential for matching, since
+    OCR and Whisper disagree on these letters constantly, but lossy: it
+    turns valid spellings into different, often "wrong", ones. Callers that
+    need matching-stable text want the default; callers building text meant
+    to be read (see `tokenize_display`) should pass False. All other steps
+    (tashkeel/tatweel/punctuation stripping) are 1:1 char substitutions or
+    removals that don't shift word boundaries, so both modes tokenize into
+    the same number of words in the same order -- their outputs stay
+    index-aligned word-for-word.
+    """
     text = unicodedata.normalize("NFKC", text)
     text = TASHKEEL_RE.sub("", text)
     text = text.translate(DIGIT_MAP)
-    text = text.translate(CHAR_MAP)
+    if unify_letters:
+        text = text.translate(CHAR_MAP)
     text = ARABIC_PUNCT_RE.sub(" ", text)
     text = KEEP_RE.sub(" ", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -63,6 +76,14 @@ def normalize_text(text: str) -> str:
 def tokenize(text: str) -> list[str]:
     """Normalize then split into words -- the unit alignment operates on."""
     return normalize_text(text).split()
+
+
+def tokenize_display(text: str) -> list[str]:
+    """Like `tokenize`, but preserves original alef/hamza/ya/ta-marbuta
+    letter forms, for building output text meant to be read rather than
+    compared. Word-for-word aligned with `tokenize`'s output for the same
+    input (see `normalize_text`'s docstring)."""
+    return normalize_text(text, unify_letters=False).split()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from align import (
     _anchor_index,
     _edit_distance_le1,
+    _merge_short_gaps,
     _near_duplicate,
     build_book_words,
     extract_candidates,
@@ -41,6 +42,68 @@ def test_near_duplicate_requires_min_length_three():
 
 def test_near_duplicate_true_for_long_enough_words():
     assert _near_duplicate("مررت", "مررث")
+
+
+# -- _merge_short_gaps ---------------------------------------------------
+
+
+def test_merge_short_gaps_bridges_single_short_equal():
+    # A lone coincidental word match ("equal", 1 word) sandwiched between
+    # two comment fragments gets folded into one continuous span.
+    opcodes = [
+        ("replace", 0, 2, 0, 3),
+        ("equal", 2, 3, 3, 4),
+        ("replace", 3, 5, 4, 7),
+    ]
+    assert _merge_short_gaps(opcodes) == [("replace", 0, 5, 0, 7)]
+
+
+def test_merge_short_gaps_bridges_chain_with_deletes():
+    # Real-world shape (from an actual session): several short coincidental
+    # matches, each separated by a run of unrelated book text that's simply
+    # skipped ("delete"), before finally reaching real transcript content
+    # again. The whole chain is still noise, not just the first hop.
+    opcodes = [
+        ("replace", 0, 2, 0, 3),
+        ("equal", 2, 3, 3, 4),  # short match #1
+        ("delete", 3, 20, 4, 4),  # unrelated book text skipped
+        ("equal", 20, 21, 4, 5),  # short match #2
+        ("delete", 21, 40, 5, 5),
+        ("equal", 40, 42, 5, 7),  # short match #3 (2 words)
+        ("replace", 42, 45, 7, 10),
+    ]
+    assert _merge_short_gaps(opcodes) == [("replace", 0, 45, 0, 10)]
+
+
+def test_merge_short_gaps_stops_at_a_genuine_long_equal():
+    # An "equal" run longer than the noise threshold is a real anchor --
+    # it must survive as its own opcode and split the two comments either
+    # side of it, not get merged away.
+    opcodes = [
+        ("replace", 0, 2, 0, 3),
+        ("equal", 2, 3, 3, 4),  # short: merges into comment 1
+        ("replace", 3, 5, 4, 7),
+        ("equal", 5, 17, 7, 19),  # 12 words -- a real match
+        ("replace", 17, 19, 19, 22),
+    ]
+    assert _merge_short_gaps(opcodes) == [
+        ("replace", 0, 5, 0, 7),
+        ("equal", 5, 17, 7, 19),
+        ("replace", 17, 19, 19, 22),
+    ]
+
+
+def test_merge_short_gaps_does_not_absorb_trailing_short_equal_with_no_followup():
+    # A short "equal" with nothing after it isn't sandwiched by anything --
+    # it must be left alone rather than silently swallowed.
+    opcodes = [
+        ("replace", 0, 2, 0, 3),
+        ("equal", 2, 3, 3, 4),
+    ]
+    assert _merge_short_gaps(opcodes) == [
+        ("replace", 0, 2, 0, 3),
+        ("equal", 2, 3, 3, 4),
+    ]
 
 
 # -- extract_candidates: baseline behavior -----------------------------------
@@ -120,8 +183,9 @@ def test_build_book_words_tracks_page_per_word():
         {"page_number": 1, "text": "بسم الله"},
         {"page_number": 2, "text": "الرحمن الرحيم"},
     ]
-    words, word_pages = build_book_words(pages)
+    words, display_words, word_pages = build_book_words(pages)
     assert words == ["بسم", "الله", "الرحمن", "الرحيم"]
+    assert display_words == ["بسم", "الله", "الرحمن", "الرحيم"]
     assert word_pages == [1, 1, 2, 2]
 
 
@@ -190,6 +254,39 @@ def test_extract_comments_from_transcript_end_to_end():
     assert c["position_in_page"] == 2
     assert c["page_word_count"] == 4
     assert c["context_before"] == "بسم الله"
+
+
+def test_extract_comments_preserves_original_letter_forms():
+    # Book and transcript both use letter forms that tokenize() (matching)
+    # would collapse -- إ->ا and ى->ي -- but the comment text and context
+    # shown to a reviewer must keep the original (correct) spelling, not
+    # the collapsed one used internally for matching.
+    pages = [{"page_number": 1, "text": "إن هذا الكتاب مفيد جدى"}]
+    segments = [
+        {
+            "words": [
+                _word("إن", 0.0, 0.5),
+                _word("هذا", 0.5, 1.0),
+                _word("الكتاب", 1.0, 1.5),
+                _word("أعتقد", 1.5, 2.0),
+                _word("أن", 2.0, 2.5),
+                _word("إخراجه", 2.5, 3.0),
+                _word("كان", 3.0, 3.5),
+                _word("رائعاً", 3.5, 4.0),
+                _word("مفيد", 4.0, 4.5),
+                _word("جدى", 4.5, 5.0),
+            ]
+        }
+    ]
+
+    comments = extract_comments_from_transcript(pages, segments, min_words=5)
+
+    assert len(comments) == 1
+    c = comments[0]
+    # Original hamza/alef-maksura forms (أ, إ, ى) survive in the output --
+    # tokenize() would have rewritten all of these to ا/ي for matching.
+    assert c["text"] == "أعتقد أن إخراجه كان رائعا"
+    assert c["context_before"] == "إن هذا الكتاب"
 
 
 def test_extract_comments_from_transcript_no_context_before_opening_remark():

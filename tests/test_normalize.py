@@ -1,4 +1,4 @@
-from normalize import normalize_text, tokenize
+from normalize import normalize_text, tokenize, tokenize_display
 
 
 def test_strips_tashkeel_and_tatweel():
@@ -50,3 +50,31 @@ def test_tokenize_splits_normalized_text_on_whitespace():
         "ورحمه",
         "الله",
     ]
+
+
+def test_tokenize_display_keeps_letter_forms_tokenize_would_collapse():
+    # Same input as test_unifies_alef_variants/ya_and_alef_maksura/hamza_carriers,
+    # but tokenize_display must NOT apply the alef/hamza/ya/ta-marbuta unification --
+    # only strip tashkeel/tatweel/punctuation, so the output stays index-aligned
+    # with tokenize()'s but keeps the original (correct) spelling for display.
+    text = "إن الله أكبر آمين ٱرحم هدى وفتى سئل مؤمن مكتبة"
+    assert tokenize_display(text) == [
+        "إن",
+        "الله",
+        "أكبر",
+        "آمين",
+        "ٱرحم",
+        "هدى",
+        "وفتى",
+        "سئل",
+        "مؤمن",
+        "مكتبة",
+    ]
+    # tokenize() on the same text unifies all of those -- same word count/order.
+    assert len(tokenize_display(text)) == len(tokenize(text))
+
+
+def test_tokenize_display_still_strips_tashkeel_and_punctuation():
+    # Only the alef/hamza/ya/ta-marbuta unification is skipped -- tashkeel
+    # and punctuation stripping still apply, same as tokenize().
+    assert tokenize_display("أَلسَّلاَمُ، عَلَيْكُمْ؟") == ["ألسلام", "عليكم"]

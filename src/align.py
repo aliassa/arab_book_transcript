@@ -27,7 +27,7 @@ import sys
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
-from normalize import tokenize
+from normalize import tokenize, tokenize_display
 
 MIN_COMMENT_WORDS = 5
 
@@ -35,6 +35,16 @@ MIN_COMMENT_WORDS = 5
 # orientation context (so a reviewer doesn't have to reread the whole page
 # to find where in it the reader digressed).
 CONTEXT_WORDS = 12
+
+# SequenceMatcher searches the *whole* book (tens of thousands of words),
+# so a genuine comment that happens to use a common word/short phrase --
+# "الله", "من", even a 4-word phrase like "لا اله الا الله" -- can spuriously
+# "match" an unrelated occurrence of it elsewhere in the book, splitting one
+# continuous comment into fragments each mis-anchored to whatever random
+# page that coincidence landed on. An "equal" run this short, sandwiched
+# between two insert/replace runs, is noise rather than a real re-anchor
+# point (see _merge_short_gaps) and gets folded back into the comment.
+MAX_NOISE_GAP_WORDS = 4
 
 
 @dataclass
@@ -50,19 +60,25 @@ class Comment:
         self.n_words = self.word_end - self.word_start
 
 
-def build_book_words(pages: list[dict]) -> tuple[list[str], list[int]]:
+def build_book_words(pages: list[dict]) -> tuple[list[str], list[str], list[int]]:
     """
     Tokenizes each page's text and returns the flattened word list
-    alongside a parallel list of which page number each word came from,
-    so a position in the word list can be mapped back to a page.
+    (letter-unified, for matching) alongside a parallel display-form word
+    list (original alef/hamza/ya/ta-marbuta spellings, for output text) and
+    a parallel list of which page number each word came from, so a
+    position in the word list can be mapped back to a page. `tokenize` and
+    `tokenize_display` split identically (see normalize.py), so the two
+    word lists stay index-aligned word-for-word.
     """
     words: list[str] = []
+    display_words: list[str] = []
     word_pages: list[int] = []
     for p in pages:
-        for w in tokenize(p["text"]):
+        for w, d in zip(tokenize(p["text"]), tokenize_display(p["text"])):
             words.append(w)
+            display_words.append(d)
             word_pages.append(p["page_number"])
-    return words, word_pages
+    return words, display_words, word_pages
 
 
 def _anchor_index(word_pages: list[int], book_start: int, book_end: int) -> int | None:
@@ -118,20 +134,96 @@ def _near_duplicate(w1: str, w2: str) -> bool:
     return len(w1) >= 3 and len(w2) >= 3 and _edit_distance_le1(w1, w2)
 
 
+def _merge_short_gaps(
+    opcodes: list[tuple[str, int, int, int, int]],
+    max_gap_words: int = MAX_NOISE_GAP_WORDS,
+) -> list[tuple[str, int, int, int, int]]:
+    """
+    Fold spurious short matches out of a run of opcodes: a chain of "equal"
+    runs of at most `max_gap_words` transcript words each (and any "delete"
+    runs alongside them, which never break a span since they consume no
+    transcript words) gets absorbed into the surrounding insert/replace
+    span, provided the chain eventually leads back to another insert/
+    replace run rather than a genuine (longer) equal match or the end of
+    the opcode list -- i.e. it's actually sandwiched, not just a trailing
+    coincidence. See MAX_NOISE_GAP_WORDS for why this happens. Opcodes are
+    contiguous in both a- and b-space (each one picks up where the
+    previous left off), so bridging a gap is just extending the run's
+    a2/b2 to the next committed opcode's a2/b2 -- the skipped opcodes'
+    own ranges are implicitly included.
+    """
+    merged = []
+    i, n = 0, len(opcodes)
+    while i < n:
+        tag, a1, a2, b1, b2 = opcodes[i]
+        if tag not in ("insert", "replace"):
+            merged.append(opcodes[i])
+            i += 1
+            continue
+
+        cur_a1, cur_a2, cur_b1, cur_b2 = a1, a2, b1, b2
+        j = i + 1
+        # Tentatively-skipped delete/short-equal opcodes since the last
+        # committed insert/replace -- only actually noise if another
+        # insert/replace follows to "sandwich" them; a chain of several
+        # (e.g. a few short coincidental word matches each separated by a
+        # run of skipped book text) is still noise as long as it eventually
+        # leads back to real transcript content, not just the first hop.
+        skipped: list[tuple[str, int, int, int, int]] = []
+        while j < n:
+            jtag, ja1, ja2, jb1, jb2 = opcodes[j]
+            if jtag == "delete" or (jtag == "equal" and (jb2 - jb1) <= max_gap_words):
+                skipped.append(opcodes[j])
+                j += 1
+                continue
+            if jtag in ("insert", "replace"):
+                cur_a2, cur_b2 = ja2, jb2
+                skipped = []
+                j += 1
+                continue
+            break  # equal run too long to be coincidental: a genuine anchor
+
+        out_tag = "insert" if cur_a1 == cur_a2 else "replace"
+        merged.append((out_tag, cur_a1, cur_a2, cur_b1, cur_b2))
+        # Trailing skipped opcodes never got absorbed (nothing sandwiched
+        # them) -- keep them as-is rather than silently dropping them.
+        merged.extend(skipped)
+        i = j
+
+    return merged
+
+
 def extract_candidates(
     book_words: list[str],
     transcript_words: list[str],
     min_words: int = MIN_COMMENT_WORDS,
+    display_words: list[str] | None = None,
 ) -> list[Comment]:
     """
     Diff transcript_words (hypothesis) against book_words (reference).
     Returns runs of transcript-only words ("insert"/"replace" opcodes)
     at least min_words long.
+
+    Matching runs on `transcript_words`/`book_words`, which have their
+    alef/hamza/ya/ta-marbuta variants unified (normalize.tokenize) since
+    OCR and Whisper disagree on those constantly -- but that same
+    unification makes for wrong-looking output text. `display_words`, if
+    given, is a word-for-word-aligned list with original letter forms
+    (normalize.tokenize_display) used to build each Comment's `text`
+    instead; it defaults to `transcript_words` for callers that don't
+    need the distinction (e.g. tests).
     """
-    matcher = SequenceMatcher(a=book_words, b=transcript_words, autojunk=False)
+    display = display_words if display_words is not None else transcript_words
+    # autojunk=True (the difflib default): down-weights single transcript
+    # words that recur so often they're not meaningful match anchors --
+    # complementary to _merge_short_gaps below, which catches the same
+    # problem for book-side coincidences and multi-word phrases autojunk
+    # doesn't cover.
+    matcher = SequenceMatcher(a=book_words, b=transcript_words, autojunk=True)
+    opcodes = _merge_short_gaps(matcher.get_opcodes())
     candidates = []
 
-    for tag, a1, a2, b1, b2 in matcher.get_opcodes():
+    for tag, a1, a2, b1, b2 in opcodes:
         if tag not in ("insert", "replace"):
             continue
 
@@ -154,7 +246,7 @@ def extract_candidates(
             continue
         candidates.append(
             Comment(
-                text=" ".join(transcript_words[b1:b2]),
+                text=" ".join(display[b1:b2]),
                 word_start=b1,
                 word_end=b2,
                 book_start=a1,
@@ -182,7 +274,7 @@ def extract_comments_from_transcript(
     derived from the same whitespace-delimited splitting -- true for
     Whisper's word-level output on Arabic.
     """
-    book_words, book_word_pages = build_book_words(pages)
+    book_words, book_display_words, book_word_pages = build_book_words(pages)
 
     # First/last-exclusive book-word index of each page, so a comment's
     # position within its page can be reported (not just the page number).
@@ -194,8 +286,10 @@ def extract_comments_from_transcript(
         span[1] = idx + 1
 
     # Flatten transcript into a single word list, keeping a parallel list
-    # of (start, end) timestamps per normalized word.
+    # of (start, end) timestamps per normalized word, plus a parallel
+    # display-form word list (original letter forms) for output text.
     transcript_words: list[str] = []
+    transcript_display_words: list[str] = []
     timestamps: list[tuple[float, float]] = []
     for seg in transcript_segments:
         seg_words = seg.get("words") or []
@@ -206,11 +300,14 @@ def extract_comments_from_transcript(
             # A Whisper "word" token occasionally contains >1 space-split
             # token after normalization (e.g. punctuation-glued forms);
             # assign all of them the same timing rather than dropping them.
-            for tok in norm:
+            for tok, disp in zip(norm, tokenize_display(w["word"])):
                 transcript_words.append(tok)
+                transcript_display_words.append(disp)
                 timestamps.append((w["start"], w["end"]))
 
-    candidates = extract_candidates(book_words, transcript_words, min_words)
+    candidates = extract_candidates(
+        book_words, transcript_words, min_words, display_words=transcript_display_words
+    )
 
     comments = []
     for c in candidates:
@@ -233,7 +330,7 @@ def extract_comments_from_transcript(
         context_before = ""
         if c.book_start > 0:
             context_start = max(0, c.book_start - CONTEXT_WORDS)
-            context_before = " ".join(book_words[context_start:c.book_start])
+            context_before = " ".join(book_display_words[context_start:c.book_start])
 
         comments.append(
             {
