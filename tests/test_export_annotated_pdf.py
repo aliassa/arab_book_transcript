@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import fitz
 import pytest
 
@@ -5,6 +7,8 @@ from export_annotated_pdf import (
     _anchor_bbox,
     _comment_html,
     _group_by_pdf_page,
+    _load_word_box_cache,
+    _save_word_box_cache,
     build_annotated_pdf,
     format_ts_range,
 )
@@ -128,6 +132,71 @@ def test_build_annotated_pdf_inserted_style_adds_a_page(two_page_pdf, pages_meta
     assert doc.page_count == 3  # one extra notes page after page 2
     assert doc[1].rect.height == 500  # original page untouched in height
     doc.close()
+
+
+def test_build_annotated_pdf_inserted_short_comments_share_one_notes_page(two_page_pdf, pages_meta):
+    # Regression: comment layout used to reserve a fixed-height slot per
+    # comment from a generous per-character estimate, so a handful of short
+    # comments overflowed onto extra notes pages full of dead whitespace.
+    # Flow layout packs them onto one page.
+    comments = [
+        {"page": 2, "position_in_page": 2, "text": f"تعليق قصير {i}", "start": float(i), "end": i + 1.0}
+        for i in range(4)
+    ]
+    pdf_bytes = build_annotated_pdf(two_page_pdf, pages_meta, comments, page_offset=0, style="inserted")
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    assert doc.page_count == 3  # 2 book pages + a single shared notes page
+    doc.close()
+
+
+def test_build_annotated_pdf_inserted_header_stays_with_long_first_comment(two_page_pdf, pages_meta):
+    # Regression: a first comment too long for one notes page used to be
+    # bumped whole to a fresh page, stranding the "تعليقات الصفحة N" header
+    # alone on a nearly-empty page. With flow layout the comment starts
+    # right under the header and fragments across pages naturally.
+    comments = [{"page": 2, "position_in_page": 2, "text": "كلمة " * 800, "start": 1.0, "end": 3.0}]
+    pdf_bytes = build_annotated_pdf(two_page_pdf, pages_meta, comments, page_offset=0, style="inserted")
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    assert doc.page_count > 3  # long enough to need several notes pages
+    first_notes = doc[2]
+    assert len(first_notes.search_for("تعليقات")) > 0  # header present...
+    assert len(first_notes.search_for("كلمة")) > 0  # ...with comment text on the same page
+    doc.close()
+
+
+def test_build_annotated_pdf_bottom_band_sized_to_content(two_page_pdf, pages_meta):
+    # Regression: the bottom band used to grow by a fixed 100pt-per-comment
+    # row regardless of how little text each comment had.
+    comments = [
+        {"page": 2, "position_in_page": 2, "text": f"قصير {i}", "start": float(i), "end": i + 1.0}
+        for i in range(2)
+    ]
+    pdf_bytes = build_annotated_pdf(two_page_pdf, pages_meta, comments, page_offset=0, style="bottom")
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    assert 500 < doc[1].rect.height < 700  # grew, but well under the old 500+20+2x100
+    doc.close()
+
+
+# -- word-box cache ------------------------------------------------------------
+
+
+def test_word_box_cache_roundtrip(two_page_pdf):
+    pdf_path = Path(two_page_pdf)
+    boxes = {"3": [["كلمة", 1.0, 2.0, 3.0, 4.0]]}
+    _save_word_box_cache(pdf_path, boxes)
+    assert _load_word_box_cache(pdf_path) == boxes
+
+
+def test_word_box_cache_ignored_when_pdf_changes(two_page_pdf):
+    # Keyed on the PDF's mtime: an edited/replaced book PDF must not reuse
+    # stale word boxes, or markers would be placed off the old layout.
+    import os
+
+    pdf_path = Path(two_page_pdf)
+    _save_word_box_cache(pdf_path, {"1": [["a", 0.0, 0.0, 1.0, 1.0]]})
+    st = pdf_path.stat()
+    os.utime(pdf_path, (st.st_atime, st.st_mtime + 10))
+    assert _load_word_box_cache(pdf_path) == {}
 
 
 def test_build_annotated_pdf_no_comments_passes_pages_through_unchanged(two_page_pdf, pages_meta):

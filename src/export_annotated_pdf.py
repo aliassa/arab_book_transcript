@@ -27,6 +27,7 @@ across a book with comments on many pages.
 """
 
 import html
+import json
 import sys
 from pathlib import Path
 
@@ -41,7 +42,10 @@ from export_pdf import COVER_TITLE_CSS, cover_page_html, format_ts, session_labe
 FONT_FAMILY = "'Noto Naskh Arabic', serif"
 MARKER_COLOR = (0.75, 0.1, 0.1)
 BOTTOM_TRUNCATE_CHARS = 220
-BOTTOM_ROW_HEIGHT = 100
+# Bump to invalidate every existing word-box cache file if the OCR settings
+# below (dpi, psm) ever change -- cached boxes from different settings would
+# silently misplace markers.
+WORD_BOX_OCR_DPI = 300
 
 
 def _page_word_boxes(doc: "fitz.Document", pdf_page_index: int, method: str) -> list[tuple[str, "fitz.Rect"]]:
@@ -63,10 +67,10 @@ def _page_word_boxes(doc: "fitz.Document", pdf_page_index: int, method: str) -> 
     if method == "direct":
         return [(w[4], fitz.Rect(w[0], w[1], w[2], w[3])) for w in page.get_text("words")]
 
-    pix = page.get_pixmap(dpi=300)
+    pix = page.get_pixmap(dpi=WORD_BOX_OCR_DPI)
     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
     data = pytesseract.image_to_data(img, lang="ara", config="--psm 4", output_type=Output.DICT)
-    scale = 72 / 300
+    scale = 72 / WORD_BOX_OCR_DPI
     out = []
     for i in range(len(data["text"])):
         if not data["text"][i].strip():
@@ -77,6 +81,36 @@ def _page_word_boxes(doc: "fitz.Document", pdf_page_index: int, method: str) -> 
         h = data["height"][i] * scale
         out.append((data["text"][i], fitz.Rect(x, y, x + w, y + h)))
     return out
+
+
+def _word_box_cache_path(pdf_path: Path) -> Path:
+    return pdf_path.parent / f".{pdf_path.stem}_word_boxes_cache.json"
+
+
+def _load_word_box_cache(pdf_path: Path) -> dict[str, list]:
+    """
+    OCR word boxes persisted next to the book PDF (hidden dotfile, same
+    pattern and rationale as app.py's page-text cache): re-deriving them is
+    the slowest part of an export render (~1s of Tesseract per commented
+    page, on every render click, for a fully-scanned book), yet they only
+    change when the PDF or the OCR settings do -- both part of the key.
+    Only OCR'd pages are cached; "direct" boxes are milliseconds to redo.
+    """
+    try:
+        data = json.loads(_word_box_cache_path(pdf_path).read_text(encoding="utf-8"))
+        if data.get("mtime") == pdf_path.stat().st_mtime and data.get("dpi") == WORD_BOX_OCR_DPI:
+            return data["pages"]
+    except (OSError, ValueError, KeyError):
+        pass
+    return {}
+
+
+def _save_word_box_cache(pdf_path: Path, pages: dict[str, list]) -> None:
+    payload = {"mtime": pdf_path.stat().st_mtime, "dpi": WORD_BOX_OCR_DPI, "pages": pages}
+    try:
+        _word_box_cache_path(pdf_path).write_text(json.dumps(payload), encoding="utf-8")
+    except OSError:
+        pass  # read-only book dir just means the next render re-OCRs
 
 
 def _anchor_bbox(word_boxes: list[tuple[str, "fitz.Rect"]], position_in_page: int | None) -> "fitz.Rect | None":
@@ -113,106 +147,88 @@ def _draw_marker(page: "fitz.Page", bbox: "fitz.Rect | None", number: int) -> No
     page.insert_text((cx - 1.8, cy + 1.8), str(number), fontsize=5.2, color=MARKER_COLOR, fontname="helv")
 
 
-def _embed_html(page: "fitz.Page", rect: "fitz.Rect", html_body: str) -> None:
+def _render_html(width: float, height: float, body: str, margin: float = 0) -> "fitz.Document":
     """
-    Renders an HTML fragment via WeasyPrint to a same-size single-page PDF
-    and embeds it into `page` at `rect`, instead of PyMuPDF's own
-    `insert_htmlbox`. Both shape Arabic correctly on screen, but
-    `insert_htmlbox`'s output embeds a broken text layer for it -- visually
-    right, but `page.search_for()` finds nothing even for text plainly
-    visible on the page (confirmed empirically). WeasyPrint is already the
-    proven choice for correct Arabic PDF text elsewhere in this codebase
-    (see export_pdf.py); reusing it here keeps the resulting PDF's
-    comment text actually searchable/selectable, not just legible.
-    """
-    doc_html = (
-        f'<html><head><meta charset="utf-8"><style>'
-        f"@page {{ size: {rect.width}pt {rect.height}pt; margin: 0; }} "
-        f"body {{ margin: 0; }}"
-        f"</style></head><body>{html_body}</body></html>"
-    )
-    snippet = fitz.open(stream=HTML(string=doc_html).write_pdf(), filetype="pdf")
-    page.show_pdf_page(rect, snippet, 0)
-    snippet.close()
-
-
-def _embed_html_flowing(
-    out: "fitz.Document", page: "fitz.Page", rect: "fitz.Rect", html_body: str
-) -> "fitz.Page":
-    """
-    Like `_embed_html`, but for content too long to fit in a single
-    `rect`-sized box: rather than silently clipping it (what plain
-    `show_pdf_page(rect, snippet, 0)` does to any content past the first
-    page WeasyPrint renders), lets it flow onto additional same-size pages
-    appended to `out`. Needed because `_comment_html`'s height estimate is
-    a rough per-character heuristic, not an exact layout -- and some real
-    comments (a long opening remark can run 1000+ words) need several
-    pages' worth of height no matter how generously that estimate is
-    sized. Returns whichever page ends up holding the tail of the content,
-    so the caller knows not to keep stacking further comments under it
-    without knowing how full it already is.
+    Renders an HTML fragment via WeasyPrint to a (possibly multi-page)
+    `width`x`height`pt PDF and returns it opened, instead of drawing text
+    with PyMuPDF's own `insert_htmlbox`. Both shape Arabic correctly on
+    screen, but `insert_htmlbox`'s output embeds a broken text layer for
+    it -- visually right, but `page.search_for()` finds nothing even for
+    text plainly visible on the page (confirmed empirically). WeasyPrint
+    is already the proven choice for correct Arabic PDF text elsewhere in
+    this codebase (see export_pdf.py); reusing it here keeps the resulting
+    PDF's comment text actually searchable/selectable, not just legible.
     """
     doc_html = (
         f'<html><head><meta charset="utf-8"><style>'
-        f"@page {{ size: {rect.width}pt {rect.height}pt; margin: 0; }} "
+        f"@page {{ size: {width}pt {height}pt; margin: {margin}pt; }} "
         f"body {{ margin: 0; }}"
-        f"</style></head><body>{html_body}</body></html>"
+        f"</style></head><body>{body}</body></html>"
     )
-    snippet = fitz.open(stream=HTML(string=doc_html).write_pdf(), filetype="pdf")
-    # Captured before any new_page() call below: creating a page in `out`
-    # can invalidate previously-obtained Page objects from that same
-    # document (confirmed empirically -- accessing `page.rect` again after
-    # a second new_page() raises "page is None"), so `page` itself must
-    # not be touched again once the loop starts.
-    page_w, page_h = page.rect.width, page.rect.height
-    page.show_pdf_page(rect, snippet, 0)
-    last_page = page
-    for i in range(1, snippet.page_count):
-        last_page = out.new_page(width=page_w, height=page_h)
-        last_page.show_pdf_page(rect, snippet, i)
-    snippet.close()
-    return last_page
+    return fitz.open(stream=HTML(string=doc_html).write_pdf(), filetype="pdf")
 
 
-def _meta_html_pair(
-    page: "fitz.Page",
-    rect: tuple[float, float, float, float],
-    number: int,
-    page_label: str,
-    ts_label: str,
-    font_size: int,
-    session_label: str = "",
-) -> None:
+def _entries_html(
+    page_comments: list[tuple[int, dict]],
+    printed_label: str,
+    comment_font_size: int,
+    truncate: int | None = None,
+    header: str = "",
+) -> str:
     """
-    Comment number + page label (+ session label, when known -- a
-    whole-book export combines comments from several sessions, so which
-    one each came from matters there), and the timestamp range, as two
-    independent embedded snippets (separate bidi contexts) rather than one
-    shared line: combining Arabic text/numerals and a hyphenated Western
-    time range in a single RTL paragraph reorders the range's two halves
-    (confirmed empirically, in both WeasyPrint and PyMuPDF's htmlbox);
-    separate boxes sidestep it. The page+session label has no such range
-    in it (confirmed safe empirically too, including the 11+ session
-    fallback "المجلس رقم N" spelling, which does have a plain digit) so it
-    stays one box, just wider than the timestamp box since it carries more.
+    One flowing HTML document body for everything a commented page needs:
+    optional header, then per comment a meta line (number + page label +
+    session label when known -- a whole-book export combines comments from
+    several sessions, so which one each came from matters there -- and the
+    timestamp range) followed by the comment text. Laying the whole page
+    out as one document and letting WeasyPrint flow/paginate it replaced
+    an earlier scheme that embedded each piece into its own fixed-height
+    box sized by a per-character height *estimate*: the estimate had to be
+    generous to never clip, so real pages came out with the over-estimate
+    as dead whitespace after every comment, and a comment that outgrew the
+    space left on its page was bumped whole to a fresh page -- stranding a
+    header alone on a nearly-empty page whenever the first comment was the
+    one bumped. Flow layout has neither problem, and renders a whole page
+    in one WeasyPrint call instead of three per comment.
+
+    Bidi caveat, why the meta line is two separately-isolated blocks and
+    not one paragraph: combining Arabic text/numerals and a hyphenated
+    Western time range in a single RTL paragraph reorders the range's two
+    halves (confirmed empirically, in both WeasyPrint and PyMuPDF's
+    htmlbox). Each flex cell here is its own block with an explicit
+    `direction`, i.e. its own bidi paragraph -- re-confirmed extractable
+    in the right order after the flow-layout rewrite. The page+session
+    label has no such range in it (also confirmed safe, including the 11+
+    session fallback "المجلس رقم N" spelling, which does have a plain
+    digit) so it stays one block.
     """
-    x0, y0, x1, y1 = rect
-    mid = x0 + (x1 - x0) * 0.35
-    label = f"{number}. {page_label}"
-    if session_label:
-        label += f" · {session_label}"
-    _embed_html(
-        page,
-        fitz.Rect(mid, y0, x1, y1),
-        f'<div style="direction:rtl; text-align:right; font-family:{FONT_FAMILY}; '
-        f'font-size:{font_size}px; color:#900; font-weight:bold;">{html.escape(label)}</div>',
-    )
-    _embed_html(
-        page,
-        fitz.Rect(x0, y0, mid, y1),
-        f'<div style="direction:rtl; text-align:left; font-family:{FONT_FAMILY}; '
-        f'font-size:{font_size}px; color:#888;">{html.escape(ts_label)}</div>',
-    )
+    scale = comment_font_size / 13
+    meta_size = max(7, round(10 * scale))
+    parts = []
+    if header:
+        parts.append(
+            f'<div style="direction:rtl; text-align:right; font-family:{FONT_FAMILY}; '
+            f"font-size:{max(11, round(15 * scale))}px; color:#333; "
+            f'border-bottom:1px solid #ccc; padding-bottom:8px; margin-bottom:14px;">'
+            f"{html.escape(header)}</div>"
+        )
+    for number, c in page_comments:
+        label = f"{number}. {printed_label}"
+        session_label = session_label_ar(c.get("session_number"))
+        if session_label:
+            label += f" · {session_label}"
+        parts.append(
+            f'<div style="display:flex; justify-content:space-between; direction:rtl; '
+            f'margin-bottom:3px; page-break-after:avoid;">'
+            f'<div style="direction:rtl; font-family:{FONT_FAMILY}; font-size:{meta_size}px; '
+            f'color:#900; font-weight:bold;">{html.escape(label)}</div>'
+            f'<div style="direction:ltr; font-family:{FONT_FAMILY}; font-size:{meta_size}px; '
+            f'color:#888;">{html.escape(format_ts_range(c))}</div>'
+            f"</div>"
+        )
+        body = _comment_html(c["text"], font_size=comment_font_size, truncate=truncate)
+        parts.append(f'<div style="margin-bottom:{round(14 * scale)}px;">{body}</div>')
+    return "".join(parts)
 
 
 def _comment_html(text: str, font_size: int, truncate: int | None = None) -> str:
@@ -327,15 +343,10 @@ def build_annotated_pdf(
     written to disk here).
 
     comment_font_size scales the comment body text (default 13px matches
-    the size this used to be hardcoded at). The layout boxes around it
-    (the fixed-height "bottom" row band, the "inserted" style's per-entry
-    height estimate, and the small meta-text labels) scale with it too --
-    otherwise larger text would just overflow/clip its box, since
-    `_embed_html` renders into a fixed-size single page and silently drops
-    anything past it. The scaling is quadratic (`scale ** 2`) for the
-    text-bulk components, not linear: a bigger font both fits fewer
-    characters per line *and* makes each line taller, so the area a given
-    amount of text needs grows with the square of the font-size ratio.
+    the size this used to be hardcoded at); the meta labels and header
+    scale with it. Comment layout is one flowing HTML document per
+    commented page (see _entries_html on why, and on what the earlier
+    fixed-box scheme got wrong).
 
     book_title_ar/author_ar/commentator_ar/club_image_bytes add a
     club-branded cover page (see _insert_cover_page) as page one of the
@@ -353,6 +364,9 @@ def build_annotated_pdf(
 
     src = fitz.open(pdf_path)
     out = fitz.open()
+
+    box_cache = _load_word_box_cache(Path(pdf_path))
+    box_cache_dirty = False
 
     if book_title_ar or author_ar or commentator_ar or club_image_bytes:
         first_rect = src[0].rect
@@ -372,27 +386,44 @@ def build_annotated_pdf(
             p.show_pdf_page(fitz.Rect(0, 0, W, H), src, i)
             continue
 
-        word_boxes = _page_word_boxes(src, i, method_by_page.get(pdf_page_number, "ocr"))
+        method = method_by_page.get(pdf_page_number, "ocr")
+        cache_key = str(i)
+        if method != "direct" and cache_key in box_cache:
+            word_boxes = [(t, fitz.Rect(x0, y0, x1, y1)) for t, x0, y0, x1, y1 in box_cache[cache_key]]
+        else:
+            word_boxes = _page_word_boxes(src, i, method)
+            if method != "direct":
+                box_cache[cache_key] = [[t, r.x0, r.y0, r.x1, r.y1] for t, r in word_boxes]
+                box_cache_dirty = True
         printed_label = f"الصفحة {pdf_page_number + page_offset}"
 
         if style == "bottom":
-            row_height = round(BOTTOM_ROW_HEIGHT * scale ** 2)
-            band_h = 20 + row_height * len(page_comments)
-            p = out.new_page(width=W, height=H + band_h)
+            # Render the band's content once at a generously tall single
+            # page, measure how tall it actually came out, and grow the
+            # book page by exactly that much -- no estimate, no dead space.
+            band_w = W - 60
+            body = _entries_html(
+                page_comments, printed_label, comment_font_size, truncate=BOTTOM_TRUNCATE_CHARS
+            )
+            max_h = 80 + round(180 * scale ** 2) * len(page_comments)
+            snippet = _render_html(band_w, max_h, body)
+            while snippet.page_count > 1:  # bound was somehow still too tight
+                snippet.close()
+                max_h *= 2
+                snippet = _render_html(band_w, max_h, body)
+            blocks = snippet[0].get_text("blocks")
+            content_h = max((b[3] for b in blocks), default=20) + 4
+
+            p = out.new_page(width=W, height=H + 20 + content_h + 12)
             p.show_pdf_page(fitz.Rect(0, 0, W, H), src, i)
             for number, c in page_comments:
                 _draw_marker(p, _anchor_bbox(word_boxes, c.get("position_in_page")), number)
             p.draw_line((30, H + 14), (W - 30, H + 14), color=(0.7, 0.7, 0.7), width=0.75)
-
-            y = H + 20
-            for number, c in page_comments:
-                _meta_html_pair(
-                    p, (30, y, W - 30, y + 13), number, printed_label, format_ts_range(c),
-                    font_size=max(7, round(9 * scale)), session_label=session_label_ar(c.get("session_number")),
-                )
-                html_body = _comment_html(c["text"], font_size=comment_font_size, truncate=BOTTOM_TRUNCATE_CHARS)
-                _embed_html(p, fitz.Rect(30, y + 14, W - 30, y + row_height - 4), html_body)
-                y += row_height
+            p.show_pdf_page(
+                fitz.Rect(30, H + 20, W - 30, H + 20 + content_h),
+                snippet, 0, clip=fitz.Rect(0, 0, band_w, content_h),
+            )
+            snippet.close()
             continue
 
         # style == "inserted"
@@ -401,52 +432,17 @@ def build_annotated_pdf(
         for number, c in page_comments:
             _draw_marker(p, _anchor_bbox(word_boxes, c.get("position_in_page")), number)
 
-        notes = out.new_page(width=W, height=H)
-        _embed_html(
-            notes,
-            fitz.Rect(40, 40, W - 40, 70),
-            f'<div style="direction:rtl; text-align:right; font-family:{FONT_FAMILY}; '
-            f'font-size:15px; color:#333; border-bottom:1px solid #ccc; padding-bottom:8px;">'
-            f"تعليقات {printed_label}</div>",
+        body = _entries_html(
+            page_comments, printed_label, comment_font_size, header=f"تعليقات {printed_label}"
         )
-        y = 90
-        for number, c in page_comments:
-            if y > H - 80:
-                notes = out.new_page(width=W, height=H)
-                y = 40
+        snippet = _render_html(W, H, body, margin=40)
+        for j in range(snippet.page_count):
+            notes = out.new_page(width=W, height=H)
+            notes.show_pdf_page(fitz.Rect(0, 0, W, H), snippet, j)
+        snippet.close()
 
-            chars_per_line = max(15, round(45 / scale))
-            line_height = round(24 * scale)
-            base_h = round(70 * scale)
-            needed_h = base_h + (len(c["text"]) // chars_per_line) * line_height
-            available_h = H - y - 40
-
-            if needed_h > available_h:
-                # Doesn't fit even generously in what's left on this page --
-                # start this comment fresh instead of clipping it (a long
-                # opening remark can run to 1000+ words / several pages'
-                # worth, see _embed_html_flowing).
-                notes = out.new_page(width=W, height=H)
-                y = 40
-                available_h = H - y - 40
-
-            _meta_html_pair(
-                notes, (40, y, W - 40, y + 16), number, printed_label, format_ts_range(c),
-                font_size=max(7, round(10 * scale)), session_label=session_label_ar(c.get("session_number")),
-            )
-            entry_h = min(needed_h, available_h)
-            html_body = _comment_html(c["text"], font_size=comment_font_size)
-            last_page = _embed_html_flowing(
-                out, notes, fitz.Rect(40, y + 18, W - 40, y + entry_h), html_body
-            )
-            if last_page is not notes:
-                # Content overflowed onto further pages -- don't guess how
-                # much of the last one is free, just start the next
-                # comment on its own fresh page.
-                notes = out.new_page(width=W, height=H)
-                y = 40
-            else:
-                y += entry_h + 14
+    if box_cache_dirty:
+        _save_word_box_cache(Path(pdf_path), box_cache)
 
     pdf_bytes = out.tobytes()
     out.close()

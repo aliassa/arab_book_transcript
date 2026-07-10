@@ -162,23 +162,42 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    `position_in_page` points since Tesseract's word segmentation here
    isn't guaranteed identical to the `image_to_string` call
    `extract_book.py` used to build the page text that index was computed
-   against. Overlay text is rendered via WeasyPrint into a same-size
-   single-page PDF and embedded onto the target page with `show_pdf_page`
-   (`_embed_html`), rather than PyMuPDF's own `insert_htmlbox`: both shape
-   Arabic correctly on screen, but `insert_htmlbox`'s output embeds a
-   broken text layer for it — visually right, but `page.search_for()`
-   finds nothing even for text plainly visible on the page (confirmed
-   empirically after a whole-book export looked fine on screen but
-   wasn't searchable/copyable) — while WeasyPrint's is properly
-   extractable, matching `export_pdf.py`'s already-proven choice. Two
-   bidi quirks confirmed empirically in *both* engines: combining Arabic
+   against. OCR'd word boxes are persisted to a hidden
+   `.<pdf-stem>_word_boxes_cache.json` next to the book PDF (keyed on the
+   PDF's mtime + the OCR dpi, same pattern and rationale as `app.py`'s
+   page-text cache): for a fully-scanned book they're ~1s of Tesseract
+   per commented page and were re-derived on *every* render click —
+   after the first render, re-renders and style switches skip OCR
+   entirely. Comment text is laid out as one flowing HTML document per
+   commented page (`_entries_html`: header + per-comment meta line +
+   body), rendered in a single WeasyPrint call and paginated naturally —
+   for `"bottom"` it's rendered on one tall page first, measured, and the
+   book page grown by exactly the content's height. This replaced a
+   fixed-box-per-comment scheme whose per-character height *estimate*
+   over-reserved ~3× the real height (every comment trailed a block of
+   dead whitespace, inflating a real book's export by ~120 mostly-empty
+   pages) and whose "doesn't fit → bump whole comment to a fresh page"
+   rule stranded the page header alone on a near-empty page whenever the
+   first comment was long — flow layout has neither failure mode, and
+   cut WeasyPrint calls from 3 per comment to 1 per commented page
+   (~1,180 → ~75 on a real book). The rendered pages are embedded with
+   `show_pdf_page`, rather than drawn via PyMuPDF's own `insert_htmlbox`:
+   both shape Arabic correctly on screen, but `insert_htmlbox`'s output
+   embeds a broken text layer for it — visually right, but
+   `page.search_for()` finds nothing even for text plainly visible on the
+   page (confirmed empirically after a whole-book export looked fine on
+   screen but wasn't searchable/copyable) — while WeasyPrint's is properly
+   extractable, matching `export_pdf.py`'s already-proven choice. One
+   bidi quirk confirmed empirically in *both* engines: combining Arabic
    text/numerals and a hyphenated Western timestamp range (e.g.
    "0:00-5:13") in one RTL paragraph reorders the range's two halves, so
-   page-label and timestamp are always two separate `_embed_html` calls
-   (`_meta_html_pair`), never one paragraph — a plain Arabic session label
-   (`export_pdf.session_label_ar`, e.g. "المجلس التاسع") has no such range
-   in it, so it's safe to fold into the page-label box instead of needing
-   a third box. `_draw_marker` centers the marker *above* the anchor
+   the meta line keeps page-label and timestamp as two separate blocks
+   with explicit `direction`s (flex cells, i.e. independent bidi
+   paragraphs — re-confirmed after the flow-layout rewrite), never one
+   paragraph — a plain Arabic session label (`export_pdf.session_label_ar`,
+   e.g. "المجلس التاسع") has no such range
+   in it, so it's safe to fold into the page-label block instead of
+   needing a third one. `_draw_marker` centers the marker *above* the anchor
    word's own width, not offset past either edge: offsetting sideways
    only has guaranteed clearance for a word at a line's start/end (open
    margin next to it) — a word in the middle of a line, the common case,
