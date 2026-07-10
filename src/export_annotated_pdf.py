@@ -36,7 +36,7 @@ from pytesseract import Output
 from PIL import Image
 from weasyprint import HTML
 
-from export_pdf import format_ts, session_label_ar
+from export_pdf import COVER_TITLE_CSS, cover_page_html, format_ts, session_label_ar
 
 FONT_FAMILY = "'Noto Naskh Arabic', serif"
 MARKER_COLOR = (0.75, 0.1, 0.1)
@@ -230,6 +230,66 @@ def _comment_html(text: str, font_size: int, truncate: int | None = None) -> str
     )
 
 
+def _insert_cover_page(
+    out: "fitz.Document",
+    width: float,
+    height: float,
+    book_title_ar: str,
+    author_ar: str,
+    commentator_ar: str,
+    club_image_bytes: bytes | None,
+    telegram_icon_bytes: bytes | None = None,
+    facebook_icon_bytes: bytes | None = None,
+) -> None:
+    """
+    Club-branded front matter (logo, book/commentator metadata, Telegram/
+    Facebook links -- see export_pdf.cover_page_html, shared with the
+    separate-report export) as the very first page of the book copy, sized
+    to match the book's own pages so it doesn't stand out as an odd paper
+    size. Rendered through WeasyPrint and embedded via show_pdf_page like
+    every other piece of overlay text in this module, for the same
+    searchable-text reason documented on _embed_html -- not PyMuPDF's own
+    insert_htmlbox.
+    """
+    body = cover_page_html(
+        book_title_ar=book_title_ar,
+        author_ar=author_ar,
+        commentator_ar=commentator_ar,
+        club_image_bytes=club_image_bytes,
+        telegram_icon_bytes=telegram_icon_bytes,
+        facebook_icon_bytes=facebook_icon_bytes,
+    )
+    doc_html = f"""
+    <html dir="rtl" lang="ar">
+    <head>
+    <meta charset="utf-8">
+    <style>
+      @page {{ size: {width}pt {height}pt; margin: 0; }}
+      body {{
+        margin: 0; box-sizing: border-box; height: {height}pt;
+        font-family: {FONT_FAMILY}; direction: rtl; text-align: center; color: #1c231f;
+        display: flex; align-items: center; justify-content: center;
+      }}
+      .cover-page {{ padding: 32pt; box-sizing: border-box; }}
+      .cover-title {{ font-size: 22pt; margin: 0 0 8pt; }}
+      {COVER_TITLE_CSS}
+      .cover-image {{ max-width: 65%; max-height: 220pt; margin: 0 auto 20pt; display: block; }}
+      .cover-meta {{ margin-bottom: 18pt; }}
+      .cover-meta-line {{ font-size: 13pt; color: #333; margin-bottom: 6pt; }}
+      .cover-social {{ display: flex; justify-content: center; gap: 18pt; margin-top: 8pt; }}
+      .cover-social-link {{ display: inline-block; text-decoration: none; }}
+      .cover-social-icon {{ width: 22pt; height: 22pt; display: block; }}
+    </style>
+    </head>
+    <body>{body}</body>
+    </html>
+    """
+    snippet = fitz.open(stream=HTML(string=doc_html).write_pdf(), filetype="pdf")
+    page = out.new_page(width=width, height=height)
+    page.show_pdf_page(fitz.Rect(0, 0, width, height), snippet, 0)
+    snippet.close()
+
+
 def _group_by_pdf_page(comments: list[dict], page_offset: int) -> dict[int, list[tuple[int, dict]]]:
     """
     Groups (numbered sequentially across the whole book) comments by the
@@ -254,6 +314,12 @@ def build_annotated_pdf(
     page_offset: int,
     style: str,
     comment_font_size: int = 13,
+    book_title_ar: str = "",
+    author_ar: str = "",
+    commentator_ar: str = "",
+    club_image_bytes: bytes | None = None,
+    telegram_icon_bytes: bytes | None = None,
+    facebook_icon_bytes: bytes | None = None,
 ) -> bytes:
     """
     style: "bottom" or "inserted" (see module docstring). Returns PDF
@@ -270,6 +336,12 @@ def build_annotated_pdf(
     text-bulk components, not linear: a bigger font both fits fewer
     characters per line *and* makes each line taller, so the area a given
     amount of text needs grows with the square of the font-size ratio.
+
+    book_title_ar/author_ar/commentator_ar/club_image_bytes add a
+    club-branded cover page (see _insert_cover_page) as page one of the
+    output -- only when at least one of them is given, so callers/tests
+    that don't pass any of this metadata get the exact same page count as
+    before this was added.
     """
     if style not in ("bottom", "inserted"):
         raise ValueError(f"unknown style: {style!r}")
@@ -281,6 +353,14 @@ def build_annotated_pdf(
 
     src = fitz.open(pdf_path)
     out = fitz.open()
+
+    if book_title_ar or author_ar or commentator_ar or club_image_bytes:
+        first_rect = src[0].rect
+        _insert_cover_page(
+            out, first_rect.width, first_rect.height,
+            book_title_ar, author_ar, commentator_ar, club_image_bytes,
+            telegram_icon_bytes, facebook_icon_bytes,
+        )
 
     for i in range(src.page_count):
         pdf_page_number = i + 1

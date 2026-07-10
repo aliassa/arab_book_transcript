@@ -117,7 +117,23 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    WeasyPrint, not reportlab: WeasyPrint shapes/reorders Arabic text
    correctly out of the box, where reportlab would need manual
    `arabic_reshaper` + `python-bidi` handling to avoid rendering broken
-   disconnected glyphs.
+   disconnected glyphs. `cover_page_html`/`COVER_TITLE_CSS` build a
+   club-branded cover page shared by both this module's `build_pdf` and
+   `export_annotated_pdf.build_annotated_pdf` (via `_insert_cover_page`) so
+   the two exports' front matter can't drift apart: club name (set in Noto
+   Kufi Arabic, colored/gold-flourished to match `assets/club_image.jpeg`'s
+   own calligraphy — sampled from the image's own palette — rather than
+   sitting as plain black text above an already-ornate logo), that image,
+   book title/author, the session's commentator (`علّق عليه: <name>`,
+   distinct from the book's own author), and Telegram/Facebook links as
+   icon-only `<a>` tags (`assets/telegram_icon.png`/`facebook_icon.png`) so
+   the export doesn't print out raw URLs. Deliberately carries no session/
+   majlis number (per explicit request — a book's cover shouldn't imply
+   the comments behind it belong to one particular session), and `build_pdf`
+   no longer repeats the club name/metadata as a second page before the
+   entries either — the comment count and entries flow directly below the
+   cover instead of behind a forced page break, which used to just be a
+   near-empty duplicate page.
 
 6. **`export_annotated_pdf.py`** (UI-only) — a reviewer found a separate
    summary document impractical to actually use while reading, so this
@@ -131,7 +147,14 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    tight) or on a new page inserted right after it (`style="inserted"`,
    no truncation, at the cost of the book's page count growing). Comments
    are numbered sequentially across the whole book, not restarted per
-   page. Placing the marker needs each anchor word's *pixel* position,
+   page. `_insert_cover_page` prepends the same club-branded cover as
+   `export_pdf.py` (reusing `cover_page_html`/`COVER_TITLE_CSS` directly
+   rather than a second copy) as page one of the output, rendered at the
+   book's own page size instead of a fixed A4 report page, and only when
+   `build_annotated_pdf` is given at least one piece of cover metadata —
+   callers/tests that pass none of it get the exact same page count as
+   before the cover existed. Placing the marker needs each anchor word's
+   *pixel* position,
    which `extract_book.py` never captures (it only keeps flat page text)
    — `_page_word_boxes` re-derives word boxes per commented page on
    export (PyMuPDF `get_text("words")` for `"direct"` pages, Tesseract
@@ -202,11 +225,22 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
   mtime + `quality_threshold`, since the same book PDF is reused across
   every session and OCR is the expensive part — without this, extraction
   would silently re-run (and re-OCR) on every single session.
+- `assets/club_image.jpeg`/`telegram_icon.png`/`facebook_icon.png` are read
+  once at import time into `CLUB_IMAGE_BYTES`/`TELEGRAM_ICON_BYTES`/
+  `FACEBOOK_ICON_BYTES` and passed into every `build_pdf`/
+  `build_annotated_pdf` call. They live under `assets/` (tracked in git),
+  not `data/` (gitignored — the user's own book PDFs/session audio): these
+  are fixed club-branding design assets that every book/session's export
+  needs, not per-book input, so they must survive a fresh clone rather than
+  need re-adding by hand each time.
 - `book_info.json` in the book folder holds `{title_ar, author_ar,
-  page_offset}` for the Arabic PDF report (`export_pdf.py`); `title_ar`
-  defaults to the book PDF's filename stem if absent, and the file gets
-  written back to disk on every pipeline run so the user only types it
-  once per book. `page_offset` corrects for `align.py`/`extract_book.py`
+  page_offset, commentator_ar}` for the Arabic PDF report (`export_pdf.py`);
+  `title_ar` defaults to the book PDF's filename stem if absent, and the
+  file gets written back to disk on every pipeline run so the user only
+  types it once per book. `commentator_ar` is the person doing the live
+  commentary for the book (shown on the cover page as `علّق عليه: <name>`),
+  distinct from `author_ar` (the book's own author) — both are plain text
+  inputs the UI persists the same way. `page_offset` corrects for `align.py`/`extract_book.py`
   working in physical-PDF-page-index space, which is usually behind the
   book's own printed page numbers by however many front-matter pages
   (cover, table of contents, preface...) precede the book's page 1 —

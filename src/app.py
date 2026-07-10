@@ -28,6 +28,20 @@ from transcribe import MODEL_SIZE, load_model, transcribe
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 AUDIO_EXTS = {".ogg", ".mp3", ".wav", ".m4a", ".flac"}
 
+# The club's own logo/social icons, not book-specific -- checked into git
+# under assets/ (unlike data/, which is gitignored user input: book PDFs
+# and session audio) so these design assets survive a fresh clone instead
+# of silently disappearing. Read once at startup and passed as bytes into
+# export_pdf/export_annotated_pdf, which stay pure functions that don't
+# touch the filesystem themselves.
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+CLUB_IMAGE_PATH = ASSETS_DIR / "club_image.jpeg"
+CLUB_IMAGE_BYTES = CLUB_IMAGE_PATH.read_bytes() if CLUB_IMAGE_PATH.exists() else None
+TELEGRAM_ICON_PATH = ASSETS_DIR / "telegram_icon.png"
+FACEBOOK_ICON_PATH = ASSETS_DIR / "facebook_icon.png"
+TELEGRAM_ICON_BYTES = TELEGRAM_ICON_PATH.read_bytes() if TELEGRAM_ICON_PATH.exists() else None
+FACEBOOK_ICON_BYTES = FACEBOOK_ICON_PATH.read_bytes() if FACEBOOK_ICON_PATH.exists() else None
+
 # A run's transcript+comments (expensive: needs re-transcribing to
 # reproduce) and a reviewer's per-comment keep/text edits (cheap to redo,
 # but tedious) are split into two files so review edits -- saved on every
@@ -153,11 +167,18 @@ def load_book_info(book_dir: Path) -> dict:
         return {}
 
 
-def save_book_info(book_dir: Path, title_ar: str, author_ar: str, page_offset: int = 0) -> None:
+def save_book_info(
+    book_dir: Path, title_ar: str, author_ar: str, page_offset: int = 0, commentator_ar: str = ""
+) -> None:
     info_path = book_dir / "book_info.json"
     info_path.write_text(
         json.dumps(
-            {"title_ar": title_ar, "author_ar": author_ar, "page_offset": page_offset},
+            {
+                "title_ar": title_ar,
+                "author_ar": author_ar,
+                "page_offset": page_offset,
+                "commentator_ar": commentator_ar,
+            },
             ensure_ascii=False,
             indent=2,
         ),
@@ -413,6 +434,12 @@ page_offset = col3.number_input(
     "PDF page + offset. Find it by opening the PDF at a page whose "
     "printed number you know and subtracting.",
 )
+commentator_ar = st.text_input(
+    "Commentator (Arabic)",
+    value=book_info.get("commentator_ar", ""),
+    help='Shown on the exported PDFs\' cover page as "علّق عليه: <name>" '
+    "-- the person doing the live commentary for this book, not the book's author.",
+)
 st.caption("Saved to `book_info.json` in this book's folder once you run the pipeline.")
 
 session_dirs = list_session_dirs(book_dir)
@@ -519,7 +546,7 @@ if run:
     st.session_state.pop("annotated_bottom_bytes", None)
     st.session_state.pop("annotated_inserted_bytes", None)
 
-    save_book_info(book_dir, title_ar, author_ar, page_offset)
+    save_book_info(book_dir, title_ar, author_ar, page_offset, commentator_ar)
 
     run_start = time.time()
 
@@ -576,6 +603,7 @@ if run:
     st.session_state["book_folder_name"] = book_dir.name
     st.session_state["book_title_ar"] = title_ar
     st.session_state["author_ar"] = author_ar
+    st.session_state["commentator_ar"] = commentator_ar
     st.session_state["session_number"] = session_number
     st.session_state["pdf_path"] = str(pdf_path)
     st.session_state["actual_duration"] = time.time() - run_start
@@ -592,7 +620,7 @@ if resume:
     st.session_state.pop("annotated_bottom_bytes", None)
     st.session_state.pop("annotated_inserted_bytes", None)
 
-    save_book_info(book_dir, title_ar, author_ar, page_offset)
+    save_book_info(book_dir, title_ar, author_ar, page_offset, commentator_ar)
 
     pages, _ = get_book_pages(pdf_path, saved_run.get("quality_threshold", quality_threshold))
     result = saved_run["transcript"]
@@ -613,6 +641,7 @@ if resume:
     st.session_state["book_folder_name"] = book_dir.name
     st.session_state["book_title_ar"] = title_ar
     st.session_state["author_ar"] = author_ar
+    st.session_state["commentator_ar"] = commentator_ar
     st.session_state["session_number"] = session_number
     st.session_state["pdf_path"] = str(pdf_path)
     st.session_state["actual_duration"] = None
@@ -719,7 +748,10 @@ if "comments" in st.session_state:
             reviewed,
             book_title_ar=st.session_state.get("book_title_ar", ""),
             author_ar=st.session_state.get("author_ar", ""),
-            session_number=st.session_state.get("session_number"),
+            commentator_ar=st.session_state.get("commentator_ar", ""),
+            club_image_bytes=CLUB_IMAGE_BYTES,
+            telegram_icon_bytes=TELEGRAM_ICON_BYTES,
+            facebook_icon_bytes=FACEBOOK_ICON_BYTES,
         )
         st.session_state["pdf_count"] = len(reviewed)
 
@@ -762,6 +794,12 @@ if "comments" in st.session_state:
                 annotated_page_offset,
                 style="bottom",
                 comment_font_size=comment_pdf_font_size,
+                book_title_ar=st.session_state.get("book_title_ar", ""),
+                author_ar=st.session_state.get("author_ar", ""),
+                commentator_ar=st.session_state.get("commentator_ar", ""),
+                club_image_bytes=CLUB_IMAGE_BYTES,
+                telegram_icon_bytes=TELEGRAM_ICON_BYTES,
+                facebook_icon_bytes=FACEBOOK_ICON_BYTES,
             )
     if "annotated_bottom_bytes" in st.session_state:
         annot_col1.download_button(
@@ -780,6 +818,12 @@ if "comments" in st.session_state:
                 annotated_page_offset,
                 style="inserted",
                 comment_font_size=comment_pdf_font_size,
+                book_title_ar=st.session_state.get("book_title_ar", ""),
+                author_ar=st.session_state.get("author_ar", ""),
+                commentator_ar=st.session_state.get("commentator_ar", ""),
+                club_image_bytes=CLUB_IMAGE_BYTES,
+                telegram_icon_bytes=TELEGRAM_ICON_BYTES,
+                facebook_icon_bytes=FACEBOOK_ICON_BYTES,
             )
     if "annotated_inserted_bytes" in st.session_state:
         annot_col2.download_button(
@@ -884,6 +928,12 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                         page_offset,
                         style="bottom",
                         comment_font_size=comment_pdf_font_size,
+                        book_title_ar=title_ar,
+                        author_ar=author_ar,
+                        commentator_ar=commentator_ar,
+                        club_image_bytes=CLUB_IMAGE_BYTES,
+                        telegram_icon_bytes=TELEGRAM_ICON_BYTES,
+                        facebook_icon_bytes=FACEBOOK_ICON_BYTES,
                     )
             if "whole_book_bottom_bytes" in st.session_state:
                 whole_col1.download_button(
@@ -902,6 +952,12 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                         page_offset,
                         style="inserted",
                         comment_font_size=comment_pdf_font_size,
+                        book_title_ar=title_ar,
+                        author_ar=author_ar,
+                        commentator_ar=commentator_ar,
+                        club_image_bytes=CLUB_IMAGE_BYTES,
+                        telegram_icon_bytes=TELEGRAM_ICON_BYTES,
+                        facebook_icon_bytes=FACEBOOK_ICON_BYTES,
                     )
             if "whole_book_inserted_bytes" in st.session_state:
                 whole_col2.download_button(

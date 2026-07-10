@@ -15,6 +15,7 @@ identical either way.
 
 ```
 src/      pipeline code + the Streamlit app
+assets/   club logo + Telegram/Facebook icons (tracked in git -- fixed branding, not per-book input)
 data/     book PDFs and session audio (gitignored -- your local input files)
 output/   transcripts, extracted book text, comments (gitignored -- generated)
 docs/     background/planning notes
@@ -24,7 +25,7 @@ The UI expects `data/` organized per book, one subfolder per reading session:
 
 ```
 data/<book_folder>/book.pdf          # full book PDF
-data/<book_folder>/book_info.json    # {"title_ar": "...", "author_ar": "..."} -- optional, UI fills it in
+data/<book_folder>/book_info.json    # {"title_ar", "author_ar", "commentator_ar", "page_offset"} -- optional, UI fills it in
 data/<book_folder>/1/session1.ogg    # session 1's audio
 data/<book_folder>/2/session2.ogg    # session 2's audio
 ...
@@ -152,10 +153,13 @@ streamlit run src/app.py
 Opens at `http://localhost:8501`. Then:
 
 1. Pick the **Book** from the dropdown (populated from `data/`).
-2. Check/edit **Book title (Arabic)** and **Author (Arabic)** — pre-filled
-   from `book_info.json` if it exists, else from the book PDF's filename.
-   Saved back to `book_info.json` the first time you run the pipeline for
-   this book, so you only type it once.
+2. Check/edit **Book title (Arabic)**, **Author (Arabic)**, and
+   **Commentator (Arabic)** — pre-filled from `book_info.json` if it
+   exists, else Book title falls back to the book PDF's filename.
+   Commentator is the person doing the live commentary for this book (shown
+   on the exported cover page as "علّق عليه: <name>"), not the book's own
+   author. All saved back to `book_info.json` the first time you run the
+   pipeline for this book, so you only type them once.
 3. Pick the **Session** — sessions are the numbered subfolders
    (`data/<book>/1`, `2`, ...), labelled with their Arabic ordinal
    (المجلس الأول, الثاني, ...). The PDF and audio for that session are found
@@ -191,18 +195,22 @@ Opens at `http://localhost:8501`. Then:
 7. Click **Generate PDF report** — it uses whatever is currently in the
    text boxes and checkboxes at that moment, so review everything first.
    A **Download comments_report.pdf** button appears once it's built,
-   showing how many comments were kept. The report is Arabic-only: club
-   name, book title/author/session, and the kept comments.
+   showing how many comments were kept. The report is Arabic-only, and
+   opens with a club-branded cover page (club logo, book title/author,
+   commentator, and Telegram/Facebook links as icons — no visible URLs,
+   no session number, since the cover fronts the book, not one session)
+   followed directly by the comment count and the kept comments — no
+   separate/blank page in between.
 
    A separate report isn't the only option: **Generate annotated PDF
    (bottom of page)** and **Generate annotated PDF (separate page)**
    overlay the same kept/edited comments directly onto the book's own PDF
-   instead — a small numbered marker at the spot each comment was made,
-   with the comment text either in new whitespace at the bottom of that
-   page (long comments get truncated to fit) or on a whole new page
-   inserted right after it (no truncation, but the book's page count
-   grows). Both need the book's actual PDF, so they're disabled if it
-   can't be found.
+   instead — the same cover page as page one, then a small numbered marker
+   at the spot each comment was made, with the comment text either in new
+   whitespace at the bottom of that page (long comments get truncated to
+   fit) or on a whole new page inserted right after it (no truncation, but
+   the book's page count grows). Both need the book's actual PDF, so
+   they're disabled if it can't be found.
 8. Download `comments.json`, `transcript.json`, or `book_pages.json` if you
    want the raw (unreviewed) output instead.
 
@@ -268,9 +276,11 @@ meant to be opened directly.
 }
 ```
 
-`comments_report.pdf` (UI only, after review) lists just the kept
-comments — your edited text, book page, and mm:ss timestamp range for
-each — with correctly shaped/reordered Arabic text (via WeasyPrint).
+`comments_report.pdf` (UI only, after review) opens with the club-branded
+cover page (logo, book title/author/commentator, Telegram/Facebook icons),
+then lists just the kept comments — your edited text, book page, and
+mm:ss timestamp range for each — with correctly shaped/reordered Arabic
+text (via WeasyPrint).
 
 ## Known limitations (not yet fixed)
 

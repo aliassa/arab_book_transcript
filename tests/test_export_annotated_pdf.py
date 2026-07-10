@@ -163,3 +163,39 @@ def test_build_annotated_pdf_omits_session_label_when_unknown(two_page_pdf, page
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     assert len(doc[2].search_for("المجلس")) == 0
     doc.close()
+
+
+# -- cover page --------------------------------------------------------------
+
+
+def test_build_annotated_pdf_no_cover_page_when_no_book_info_given(two_page_pdf, pages_meta):
+    # Backward-compatible default: callers/tests that pass none of the new
+    # cover-page metadata get the exact same page count as before it existed.
+    pdf_bytes = build_annotated_pdf(two_page_pdf, pages_meta, [], page_offset=0, style="bottom")
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    assert doc.page_count == 2
+    doc.close()
+
+
+def test_build_annotated_pdf_adds_cover_page_when_book_title_given(two_page_pdf, pages_meta):
+    pdf_bytes = build_annotated_pdf(
+        two_page_pdf, pages_meta, [], page_offset=0, style="bottom",
+        book_title_ar="كتاب تجريبي", author_ar="مؤلف", commentator_ar="فلان الفلاني",
+    )
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    assert doc.page_count == 3  # cover page + the 2 original pages, untouched
+    assert len(doc[0].search_for("كتاب تجريبي")) > 0
+    assert len(doc[0].search_for("مؤلف")) > 0
+    assert len(doc[0].search_for("علّق عليه")) > 0
+    assert doc[1].rect.height == 500  # original first page unchanged
+    doc.close()
+
+
+def test_build_annotated_pdf_cover_page_matches_book_page_size(two_page_pdf, pages_meta):
+    pdf_bytes = build_annotated_pdf(
+        two_page_pdf, pages_meta, [], page_offset=0, style="inserted", book_title_ar="كتاب",
+    )
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    assert doc[0].rect.width == 400
+    assert doc[0].rect.height == 500
+    doc.close()
