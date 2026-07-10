@@ -58,8 +58,26 @@ MODEL_LOAD_OVERHEAD_S = 20  # rough fixed cost the first time a size is loaded
 DEFAULT_UNCHECKED_BELOW_WORDS = 10
 
 st.set_page_config(page_title="Reading Club — Comment Extractor", layout="centered")
+
+# Font/size for the comment text areas are user-adjustable (widgets further
+# down, keyed "comment_font_family"/"comment_font_size") -- read here from
+# session_state so the very next rerun after a change already reflects it;
+# the first-ever render (before the widgets exist) falls back to the same
+# defaults the widgets themselves use.
+COMMENT_FONT_OPTIONS = {
+    "Default (sans-serif)": "Tahoma, Arial, sans-serif",
+    "Serif (Traditional Arabic)": '"Traditional Arabic", "Amiri", serif',
+    "Naskh (book-style)": '"Noto Naskh Arabic", "Traditional Arabic", serif',
+}
+DEFAULT_COMMENT_FONT_FAMILY = "Naskh (book-style)"
+DEFAULT_COMMENT_FONT_SIZE = 1.3
+
+_font_family_label = st.session_state.get("comment_font_family", DEFAULT_COMMENT_FONT_FAMILY)
+_font_size = st.session_state.get("comment_font_size", DEFAULT_COMMENT_FONT_SIZE)
 st.markdown(
-    "<style>.stTextArea textarea { direction: rtl; text-align: right; font-size: 1.1rem; }</style>",
+    f"<style>.stTextArea textarea {{ direction: rtl; text-align: right; "
+    f"font-size: {_font_size}rem; "
+    f"font-family: {COMMENT_FONT_OPTIONS[_font_family_label]}; }}</style>",
     unsafe_allow_html=True,
 )
 
@@ -438,6 +456,19 @@ with st.expander("Advanced options"):
         if limit_audio:
             clip_minutes = st.slider("Minutes to analyze (from the start)", 1, full_minutes, full_minutes)
 
+# Purely a rendering setting for the annotated-PDF exports further down
+# (both per-session and whole-book) -- unlike the options above, changing
+# this needs only a re-click of "Generate...", not a pipeline rerun, so it
+# lives outside "Advanced options" to avoid implying otherwise.
+comment_pdf_font_size = st.slider(
+    "Comment text size in exported PDF",
+    9, 22, 13,
+    help="Font size for the comment text overlaid onto the book PDF itself "
+    "(the annotated PDF exports below) -- not the review text boxes above. "
+    "Changing this doesn't need a pipeline rerun, just click "
+    "\"Generate...\" again.",
+)
+
 # clip_timestamps is faster-whisper's own "start,end" range syntax (seconds);
 # passing it through to transcribe() means timestamps come back absolute
 # against the full file, so nothing downstream (audio clipping, page
@@ -616,6 +647,14 @@ if "comments" in st.session_state:
         "wrong, and uncheck anything that isn't actually a comment."
     )
 
+    font_col, size_col = st.columns(2)
+    font_col.selectbox(
+        "Comment text font", list(COMMENT_FONT_OPTIONS), key="comment_font_family"
+    )
+    size_col.slider(
+        "Comment text size", 0.9, 2.5, DEFAULT_COMMENT_FONT_SIZE, 0.1, key="comment_font_size"
+    )
+
     for i, c in enumerate(comments):
         with st.container(border=True):
             page_note = f"page {c['page']}"
@@ -722,6 +761,7 @@ if "comments" in st.session_state:
                 reviewed,
                 annotated_page_offset,
                 style="bottom",
+                comment_font_size=comment_pdf_font_size,
             )
     if "annotated_bottom_bytes" in st.session_state:
         annot_col1.download_button(
@@ -739,6 +779,7 @@ if "comments" in st.session_state:
                 reviewed,
                 annotated_page_offset,
                 style="inserted",
+                comment_font_size=comment_pdf_font_size,
             )
     if "annotated_inserted_bytes" in st.session_state:
         annot_col2.download_button(
@@ -842,6 +883,7 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                         offset_comments,
                         page_offset,
                         style="bottom",
+                        comment_font_size=comment_pdf_font_size,
                     )
             if "whole_book_bottom_bytes" in st.session_state:
                 whole_col1.download_button(
@@ -859,6 +901,7 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                         offset_comments,
                         page_offset,
                         style="inserted",
+                        comment_font_size=comment_pdf_font_size,
                     )
             if "whole_book_inserted_bytes" in st.session_state:
                 whole_col2.download_button(

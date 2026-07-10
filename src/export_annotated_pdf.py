@@ -136,6 +136,44 @@ def _embed_html(page: "fitz.Page", rect: "fitz.Rect", html_body: str) -> None:
     snippet.close()
 
 
+def _embed_html_flowing(
+    out: "fitz.Document", page: "fitz.Page", rect: "fitz.Rect", html_body: str
+) -> "fitz.Page":
+    """
+    Like `_embed_html`, but for content too long to fit in a single
+    `rect`-sized box: rather than silently clipping it (what plain
+    `show_pdf_page(rect, snippet, 0)` does to any content past the first
+    page WeasyPrint renders), lets it flow onto additional same-size pages
+    appended to `out`. Needed because `_comment_html`'s height estimate is
+    a rough per-character heuristic, not an exact layout -- and some real
+    comments (a long opening remark can run 1000+ words) need several
+    pages' worth of height no matter how generously that estimate is
+    sized. Returns whichever page ends up holding the tail of the content,
+    so the caller knows not to keep stacking further comments under it
+    without knowing how full it already is.
+    """
+    doc_html = (
+        f'<html><head><meta charset="utf-8"><style>'
+        f"@page {{ size: {rect.width}pt {rect.height}pt; margin: 0; }} "
+        f"body {{ margin: 0; }}"
+        f"</style></head><body>{html_body}</body></html>"
+    )
+    snippet = fitz.open(stream=HTML(string=doc_html).write_pdf(), filetype="pdf")
+    # Captured before any new_page() call below: creating a page in `out`
+    # can invalidate previously-obtained Page objects from that same
+    # document (confirmed empirically -- accessing `page.rect` again after
+    # a second new_page() raises "page is None"), so `page` itself must
+    # not be touched again once the loop starts.
+    page_w, page_h = page.rect.width, page.rect.height
+    page.show_pdf_page(rect, snippet, 0)
+    last_page = page
+    for i in range(1, snippet.page_count):
+        last_page = out.new_page(width=page_w, height=page_h)
+        last_page.show_pdf_page(rect, snippet, i)
+    snippet.close()
+    return last_page
+
+
 def _meta_html_pair(
     page: "fitz.Page",
     rect: tuple[float, float, float, float],
@@ -215,14 +253,28 @@ def build_annotated_pdf(
     comments: list[dict],
     page_offset: int,
     style: str,
+    comment_font_size: int = 13,
 ) -> bytes:
     """
     style: "bottom" or "inserted" (see module docstring). Returns PDF
     bytes, matching export_pdf.build_pdf's in-memory-only pattern (nothing
     written to disk here).
+
+    comment_font_size scales the comment body text (default 13px matches
+    the size this used to be hardcoded at). The layout boxes around it
+    (the fixed-height "bottom" row band, the "inserted" style's per-entry
+    height estimate, and the small meta-text labels) scale with it too --
+    otherwise larger text would just overflow/clip its box, since
+    `_embed_html` renders into a fixed-size single page and silently drops
+    anything past it. The scaling is quadratic (`scale ** 2`) for the
+    text-bulk components, not linear: a bigger font both fits fewer
+    characters per line *and* makes each line taller, so the area a given
+    amount of text needs grows with the square of the font-size ratio.
     """
     if style not in ("bottom", "inserted"):
         raise ValueError(f"unknown style: {style!r}")
+
+    scale = comment_font_size / 13
 
     method_by_page = {p["page_number"]: p["method"] for p in pages}
     by_page = _group_by_pdf_page(comments, page_offset)
@@ -244,7 +296,8 @@ def build_annotated_pdf(
         printed_label = f"الصفحة {pdf_page_number + page_offset}"
 
         if style == "bottom":
-            band_h = 20 + BOTTOM_ROW_HEIGHT * len(page_comments)
+            row_height = round(BOTTOM_ROW_HEIGHT * scale ** 2)
+            band_h = 20 + row_height * len(page_comments)
             p = out.new_page(width=W, height=H + band_h)
             p.show_pdf_page(fitz.Rect(0, 0, W, H), src, i)
             for number, c in page_comments:
@@ -255,11 +308,11 @@ def build_annotated_pdf(
             for number, c in page_comments:
                 _meta_html_pair(
                     p, (30, y, W - 30, y + 13), number, printed_label, format_ts_range(c),
-                    font_size=9, session_label=session_label_ar(c.get("session_number")),
+                    font_size=max(7, round(9 * scale)), session_label=session_label_ar(c.get("session_number")),
                 )
-                html_body = _comment_html(c["text"], font_size=13, truncate=BOTTOM_TRUNCATE_CHARS)
-                _embed_html(p, fitz.Rect(30, y + 14, W - 30, y + BOTTOM_ROW_HEIGHT - 4), html_body)
-                y += BOTTOM_ROW_HEIGHT
+                html_body = _comment_html(c["text"], font_size=comment_font_size, truncate=BOTTOM_TRUNCATE_CHARS)
+                _embed_html(p, fitz.Rect(30, y + 14, W - 30, y + row_height - 4), html_body)
+                y += row_height
             continue
 
         # style == "inserted"
@@ -281,14 +334,39 @@ def build_annotated_pdf(
             if y > H - 80:
                 notes = out.new_page(width=W, height=H)
                 y = 40
+
+            chars_per_line = max(15, round(45 / scale))
+            line_height = round(24 * scale)
+            base_h = round(70 * scale)
+            needed_h = base_h + (len(c["text"]) // chars_per_line) * line_height
+            available_h = H - y - 40
+
+            if needed_h > available_h:
+                # Doesn't fit even generously in what's left on this page --
+                # start this comment fresh instead of clipping it (a long
+                # opening remark can run to 1000+ words / several pages'
+                # worth, see _embed_html_flowing).
+                notes = out.new_page(width=W, height=H)
+                y = 40
+                available_h = H - y - 40
+
             _meta_html_pair(
                 notes, (40, y, W - 40, y + 16), number, printed_label, format_ts_range(c),
-                font_size=10, session_label=session_label_ar(c.get("session_number")),
+                font_size=max(7, round(10 * scale)), session_label=session_label_ar(c.get("session_number")),
             )
-            entry_h = min(70 + (len(c["text"]) // 45) * 24, H - y - 40)
-            html_body = _comment_html(c["text"], font_size=13)
-            _embed_html(notes, fitz.Rect(40, y + 18, W - 40, y + entry_h), html_body)
-            y += entry_h + 14
+            entry_h = min(needed_h, available_h)
+            html_body = _comment_html(c["text"], font_size=comment_font_size)
+            last_page = _embed_html_flowing(
+                out, notes, fitz.Rect(40, y + 18, W - 40, y + entry_h), html_body
+            )
+            if last_page is not notes:
+                # Content overflowed onto further pages -- don't guess how
+                # much of the last one is free, just start the next
+                # comment on its own fresh page.
+                notes = out.new_page(width=W, height=H)
+                y = 40
+            else:
+                y += entry_h + 14
 
     pdf_bytes = out.tobytes()
     out.close()
