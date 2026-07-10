@@ -43,6 +43,14 @@ for correctness, see the note on `book_pages_cache` below.
   for scanned/low-quality PDF pages.
 - `ffmpeg` — used to clip audio manually (see below) and, in the UI, to cut
   each candidate comment's own playback clip for review.
+- `fonts-noto-core` — the PDF exports set Arabic text in Noto Naskh Arabic
+  and the cover title in Noto Kufi Arabic. Without these fonts WeasyPrint
+  silently substitutes a generic serif: everything still renders, just in
+  the wrong typeface, with no error pointing at the missing fonts.
+- WeasyPrint's native libraries (`libpango-1.0-0`, `libpangoft2-1.0-0`) —
+  `pip install weasyprint` succeeds without them and only fails later, at
+  import time. Usually already present on a desktop install, missing on
+  servers/containers.
 
 ### Setting up from a fresh clone
 
@@ -56,7 +64,8 @@ git clone git@github.com:aliassa/arab_book_transcript.git
 cd arab_book_transcript
 
 # system deps (Debian/Ubuntu)
-sudo apt install -y tesseract-ocr tesseract-ocr-ara ffmpeg
+sudo apt install -y tesseract-ocr tesseract-ocr-ara ffmpeg \
+  fonts-noto-core libpango-1.0-0 libpangoft2-1.0-0
 
 # python deps
 python3 -m venv .venv
