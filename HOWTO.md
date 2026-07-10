@@ -203,10 +203,13 @@ Opens at `http://localhost:8501`. Then:
    be false positives too).
 7. Click **Generate PDF report** — it uses whatever is currently in the
    text boxes and checkboxes at that moment, so review everything first.
-   A **Download comments_report.pdf** button appears once it's built,
-   showing how many comments were kept. The report is Arabic-only, and
+   The finished PDF is written to `output/` (overwriting the previous copy
+   of the same name) and opened in your PDF viewer automatically; a
+   **Download comments_report.pdf** button also appears as a fallback,
+   showing how many comments were kept. The same save-and-open behavior
+   applies to every Generate-PDF button below. The report is Arabic-only, and
    opens with a club-branded cover page (club logo, book title/author,
-   commentator, and Telegram/Facebook links as icons — no visible URLs,
+   commentator, and Telegram/Facebook links as labeled icons — no visible URLs,
    no session number, since the cover fronts the book, not one session)
    followed directly by the comment count and the kept comments — no
    separate/blank page in between.

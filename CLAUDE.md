@@ -303,9 +303,18 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
   resuming reloads the saved transcript/comments (skipping re-transcription
   and re-alignment entirely) plus any saved review edits, and only redoes
   the cheap steps (page-cache lookup, audio clipping). `comments.json`/
-  `transcript.json`/`book_pages.json`/PDF are still separate, explicit
+  `transcript.json`/`book_pages.json` are still separate, explicit
   downloads for taking results *out* of the tool — the two state files
   above are an internal safety net, not meant to be consumed directly.
+  Generated PDFs (all five buttons: report, per-session annotated ×2,
+  whole-book annotated ×2) skip that click: `save_and_open_pdf` writes
+  them straight into `output/` (fixed name per book/session, overwriting
+  the previous copy rather than piling up browser-style "name (6).pdf"
+  duplicates) and opens them in the system viewer via `xdg-open` — called
+  only inside the generate-button branch, never on ordinary reruns, which
+  would re-open the viewer on every checkbox click. The download buttons
+  remain as a fallback for when the browser isn't on the machine running
+  the app.
 - "Whole-book annotated PDF" (its own expander) sweeps every numbered
   session folder under the selected book, not just the one picked above —
   split into one processing step and two independent render steps, since

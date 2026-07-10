@@ -26,6 +26,7 @@ from extract_book import extract_book
 from transcribe import MODEL_SIZE, load_model, transcribe
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 AUDIO_EXTS = {".ogg", ".mp3", ".wav", ".m4a", ".flac"}
 
 # The club's own logo/social icons, not book-specific -- checked into git
@@ -184,6 +185,33 @@ def save_book_info(
         ),
         encoding="utf-8",
     )
+
+
+def save_and_open_pdf(pdf_bytes: bytes, filename: str) -> Path:
+    """
+    Writes a generated PDF straight into the repo's output/ folder and
+    opens it in the system PDF viewer, so the normal local flow needs no
+    manual "Download" click (the download buttons stay as a fallback,
+    e.g. when the browser isn't on the machine running the app). Same
+    filename overwrites the previous copy in place -- regenerating should
+    update the one file, not pile up "name (6).pdf" duplicates the way
+    repeated browser downloads did. Must only be called inside a
+    generate-button branch, never on ordinary reruns: Streamlit reruns
+    the whole script on every widget interaction, and re-opening the
+    viewer on each of those would spawn a window per checkbox click.
+    """
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    path = OUTPUT_DIR / filename
+    path.write_bytes(pdf_bytes)
+    try:
+        subprocess.Popen(
+            ["xdg-open", str(path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        pass  # headless / no viewer configured -- the file is still saved
+    return path
 
 
 def get_book_pages(pdf_path: Path, quality_threshold: float) -> tuple[list[dict], bool]:
@@ -763,6 +791,7 @@ if "comments" in st.session_state:
             facebook_icon_bytes=FACEBOOK_ICON_BYTES,
         )
         st.session_state["pdf_count"] = len(reviewed)
+        save_and_open_pdf(st.session_state["pdf_bytes"], f"{file_stem}_report.pdf")
 
     if "pdf_bytes" in st.session_state:
         st.download_button(
@@ -771,6 +800,7 @@ if "comments" in st.session_state:
             file_name=f"{file_stem}_report.pdf",
             mime="application/pdf",
         )
+        st.caption(f"Saved to `output/{file_stem}_report.pdf` and opened in your PDF viewer.")
 
     st.caption(
         "Or annotate the book PDF itself instead of a separate report -- a "
@@ -810,6 +840,7 @@ if "comments" in st.session_state:
                 telegram_icon_bytes=TELEGRAM_ICON_BYTES,
                 facebook_icon_bytes=FACEBOOK_ICON_BYTES,
             )
+        save_and_open_pdf(st.session_state["annotated_bottom_bytes"], f"{file_stem}_annotated_bottom.pdf")
     if "annotated_bottom_bytes" in st.session_state:
         annot_col1.download_button(
             "Download annotated_bottom.pdf",
@@ -817,6 +848,7 @@ if "comments" in st.session_state:
             file_name=f"{file_stem}_annotated_bottom.pdf",
             mime="application/pdf",
         )
+        annot_col1.caption(f"Saved to `output/{file_stem}_annotated_bottom.pdf` and opened.")
 
     if annot_col2.button("Generate annotated PDF (separate page)", disabled=not annotated_book_pdf_path):
         with st.spinner("Rendering annotated PDF..."):
@@ -834,6 +866,7 @@ if "comments" in st.session_state:
                 telegram_icon_bytes=TELEGRAM_ICON_BYTES,
                 facebook_icon_bytes=FACEBOOK_ICON_BYTES,
             )
+        save_and_open_pdf(st.session_state["annotated_inserted_bytes"], f"{file_stem}_annotated_inserted.pdf")
     if "annotated_inserted_bytes" in st.session_state:
         annot_col2.download_button(
             "Download annotated_inserted.pdf",
@@ -841,6 +874,7 @@ if "comments" in st.session_state:
             file_name=f"{file_stem}_annotated_inserted.pdf",
             mime="application/pdf",
         )
+        annot_col2.caption(f"Saved to `output/{file_stem}_annotated_inserted.pdf` and opened.")
 
     st.divider()
     dl1, dl2, dl3 = st.columns(3)
@@ -944,6 +978,10 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                         telegram_icon_bytes=TELEGRAM_ICON_BYTES,
                         facebook_icon_bytes=FACEBOOK_ICON_BYTES,
                     )
+                save_and_open_pdf(
+                    st.session_state["whole_book_bottom_bytes"],
+                    f"{book_dir.name}_annotated_bottom.pdf",
+                )
             if "whole_book_bottom_bytes" in st.session_state:
                 whole_col1.download_button(
                     f"Download {book_dir.name}_annotated_bottom.pdf ({len(raw_comments)} comments)",
@@ -951,6 +989,7 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                     file_name=f"{book_dir.name}_annotated_bottom.pdf",
                     mime="application/pdf",
                 )
+                whole_col1.caption(f"Saved to `output/{book_dir.name}_annotated_bottom.pdf` and opened.")
 
             if whole_col2.button("Generate PDF (separate page)"):
                 with st.spinner(f"Rendering whole-book annotated PDF ({len(offset_comments)} comment(s))..."):
@@ -968,6 +1007,10 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                         telegram_icon_bytes=TELEGRAM_ICON_BYTES,
                         facebook_icon_bytes=FACEBOOK_ICON_BYTES,
                     )
+                save_and_open_pdf(
+                    st.session_state["whole_book_inserted_bytes"],
+                    f"{book_dir.name}_annotated_inserted.pdf",
+                )
             if "whole_book_inserted_bytes" in st.session_state:
                 whole_col2.download_button(
                     f"Download {book_dir.name}_annotated_inserted.pdf ({len(raw_comments)} comments)",
@@ -975,3 +1018,4 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                     file_name=f"{book_dir.name}_annotated_inserted.pdf",
                     mime="application/pdf",
                 )
+                whole_col2.caption(f"Saved to `output/{book_dir.name}_annotated_inserted.pdf` and opened.")
