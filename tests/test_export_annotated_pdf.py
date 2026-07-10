@@ -260,6 +260,23 @@ def test_build_annotated_pdf_adds_cover_page_when_book_title_given(two_page_pdf,
     doc.close()
 
 
+def test_build_annotated_pdf_cover_social_links_are_clickable(two_page_pdf, pages_meta):
+    # Regression: show_pdf_page embeds page content but drops annotations,
+    # so the cover's Telegram/Facebook links rendered fine yet did nothing
+    # when clicked until they were copied across explicitly.
+    pdf_bytes = build_annotated_pdf(
+        two_page_pdf, pages_meta, [], page_offset=0, style="inserted",
+        book_title_ar="كتاب",
+        telegram_icon_bytes=b"\x89PNGfaketelegram",
+        facebook_icon_bytes=b"\x89PNGfakefacebook",
+    )
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    uris = {link.get("uri") for link in doc[0].get_links()}
+    assert "https://t.me/NadiAlQuraaAlArab" in uris
+    assert "https://www.facebook.com/groups/1752014606211247/" in uris
+    doc.close()
+
+
 def test_build_annotated_pdf_cover_page_matches_book_page_size(two_page_pdf, pages_meta):
     pdf_bytes = build_annotated_pdf(
         two_page_pdf, pages_meta, [], page_offset=0, style="inserted", book_title_ar="كتاب",

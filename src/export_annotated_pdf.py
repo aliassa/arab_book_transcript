@@ -307,6 +307,14 @@ def _insert_cover_page(
     snippet = fitz.open(stream=HTML(string=doc_html).write_pdf(), filetype="pdf")
     page = out.new_page(width=width, height=height)
     page.show_pdf_page(fitz.Rect(0, 0, width, height), snippet, 0)
+    # show_pdf_page embeds page *content* only (a Form XObject) -- PDF
+    # links are annotations, which it silently drops, so the cover's
+    # Telegram/Facebook <a> targets have to be copied across explicitly
+    # or the icons render fine but do nothing when clicked (found
+    # empirically on a real export). Coordinates transfer 1:1: the cover
+    # is embedded at the snippet's own page size, unscaled.
+    for link in snippet[0].get_links():
+        page.insert_link(link)
     snippet.close()
 
 
