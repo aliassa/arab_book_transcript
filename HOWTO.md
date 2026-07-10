@@ -209,7 +209,8 @@ Opens at `http://localhost:8501`. Then:
    showing how many comments were kept. The same save-and-open behavior
    applies to every Generate-PDF button below. The report is Arabic-only, and
    opens with a club-branded cover page (club logo, book title/author,
-   commentator, and Telegram/Facebook links as labeled icons — no visible URLs,
+   commentator, and Telegram/Facebook links as labeled icons plus a small
+   footer line with the short URLs for printed copies — no ugly full URLs,
    no session number, since the cover fronts the book, not one session)
    followed directly by the comment count and the kept comments — no
    separate/blank page in between.

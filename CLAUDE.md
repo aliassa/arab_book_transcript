@@ -127,8 +127,14 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    book title/author, the session's commentator (`علّق عليه: <name>`,
    distinct from the book's own author), and Telegram/Facebook links as
    icon + Arabic-label `<a>` tags ("رابط تيليغرام"/"رابط الفايسبوك", with
-   `assets/telegram_icon.png`/`facebook_icon.png`) so the export doesn't
-   print out raw URLs — the URL lives only in the `href`. Deliberately carries no session/
+   `assets/telegram_icon.png`/`facebook_icon.png`) — no raw URL in the
+   middle of the cover, but since a *printed* copy can't be clicked, a
+   small light-gray footer line carries the tidied short URL forms
+   (`t.me/…` · `facebook.com/groups/…`; scheme/www/trailing-slash
+   stripped by `_display_url`). Chosen over QR codes and a separate
+   closing page when options were offered. The footer is bottom-pinned on
+   the annotated export's cover (it owns its whole page) but in-flow on
+   the report's (its cover shares page 1 with the first entries). Deliberately carries no session/
    majlis number (per explicit request — a book's cover shouldn't imply
    the comments behind it belong to one particular session), and `build_pdf`
    no longer repeats the club name/metadata as a second page before the

@@ -40,6 +40,13 @@ def session_label_ar(session_number: int | None) -> str:
     return f"المجلس {ordinal}" if ordinal else f"المجلس رقم {session_number}"
 
 
+def _display_url(url: str) -> str:
+    """Short print-friendly form of a URL (no scheme/www/trailing slash) --
+    what a person would type after reading it off a printed cover."""
+    url = url.removeprefix("https://").removeprefix("http://")
+    return url.removeprefix("www.").rstrip("/")
+
+
 def _social_icon_link(url: str, icon_bytes: bytes, label_ar: str) -> str:
     encoded = base64.b64encode(icon_bytes).decode("ascii")
     return (
@@ -67,9 +74,13 @@ def cover_page_html(
     to match the book's own PDF). No session/majlis number here: this page
     fronts the whole book's worth of comments, not one session's, so a
     single session number wouldn't describe it. The Telegram/Facebook links
-    are icon + a short Arabic label ("رابط تيليغرام"/"رابط الفايسبوك") --
-    the raw URL lives only in the `<a href>` for anyone who taps/clicks it,
-    never printed out as ugly plain-text URLs.
+    are icon + a short Arabic label ("رابط تيليغرام"/"رابط الفايسبوك");
+    the full URL lives in the `<a href>` for anyone reading digitally, and
+    for *printed* copies a small light-gray footer line carries the tidied
+    short forms (`t.me/...` · `facebook.com/groups/...`) -- deliberately a
+    quiet footer, not text next to the icons, so the numeric Facebook
+    group URL doesn't sit ugly in the middle of the cover (chosen over QR
+    codes / a separate closing page when the options were offered).
     """
     image_html = ""
     if club_image_bytes:
@@ -94,6 +105,18 @@ def cover_page_html(
         social_links.append(_social_icon_link(CLUB_FACEBOOK_URL, facebook_icon_bytes, FACEBOOK_LABEL_AR))
     social_html = f'<div class="cover-social">{"".join(social_links)}</div>' if social_links else ""
 
+    footer_html = ""
+    if social_links:
+        footer_html = (
+            '<div class="cover-footer">'
+            f'<a class="cover-footer-link" href="{html.escape(CLUB_TELEGRAM_URL)}">'
+            f"{html.escape(_display_url(CLUB_TELEGRAM_URL))}</a>"
+            " &middot; "
+            f'<a class="cover-footer-link" href="{html.escape(CLUB_FACEBOOK_URL)}">'
+            f"{html.escape(_display_url(CLUB_FACEBOOK_URL))}</a>"
+            "</div>"
+        )
+
     return f"""
     <div class="cover-page">
       <h1 class="cover-title">{CLUB_NAME_AR}</h1>
@@ -101,6 +124,7 @@ def cover_page_html(
       {image_html}
       <div class="cover-meta">{meta_html}</div>
       {social_html}
+      {footer_html}
     </div>
     """
 
@@ -230,6 +254,14 @@ def build_pdf(
       }}
       .cover-social-icon {{ width: 28pt; height: 28pt; display: block; }}
       .cover-social-label {{ font-size: 13pt; font-weight: bold; white-space: nowrap; }}
+      /* In-flow (not bottom-pinned like the annotated export's): the report's
+         cover shares page 1 with the first entries, so there is no "bottom of
+         the cover" to pin to without overlapping them. */
+      .cover-footer {{
+        direction: ltr; font-size: 8pt; color: #999;
+        border-top: 0.5pt solid #ddd; padding-top: 6pt; margin-top: 18pt;
+      }}
+      .cover-footer-link {{ color: #999; text-decoration: none; }}
     </style>
     </head>
     <body>

@@ -299,6 +299,15 @@ def _insert_cover_page(
       }}
       .cover-social-icon {{ width: 26pt; height: 26pt; display: block; }}
       .cover-social-label {{ font-size: 12pt; font-weight: bold; white-space: nowrap; }}
+      /* Pinned to the page's bottom edge -- unlike the report, this cover
+         owns its whole page, so the footer can sit at the very bottom
+         without overlapping anything. */
+      .cover-footer {{
+        position: absolute; bottom: 16pt; left: 32pt; right: 32pt;
+        direction: ltr; text-align: center; font-size: 8pt; color: #999;
+        border-top: 0.5pt solid #ddd; padding-top: 6pt;
+      }}
+      .cover-footer-link {{ color: #999; text-decoration: none; }}
     </style>
     </head>
     <body>{body}</body>
