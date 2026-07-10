@@ -126,8 +126,9 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    sitting as plain black text above an already-ornate logo), that image,
    book title/author, the session's commentator (`علّق عليه: <name>`,
    distinct from the book's own author), and Telegram/Facebook links as
-   icon-only `<a>` tags (`assets/telegram_icon.png`/`facebook_icon.png`) so
-   the export doesn't print out raw URLs. Deliberately carries no session/
+   icon + Arabic-label `<a>` tags ("رابط تيليغرام"/"رابط الفايسبوك", with
+   `assets/telegram_icon.png`/`facebook_icon.png`) so the export doesn't
+   print out raw URLs — the URL lives only in the `href`. Deliberately carries no session/
    majlis number (per explicit request — a book's cover shouldn't imply
    the comments behind it belong to one particular session), and `build_pdf`
    no longer repeats the club name/metadata as a second page before the
@@ -255,8 +256,12 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
 - `book_info.json` in the book folder holds `{title_ar, author_ar,
   page_offset, commentator_ar}` for the Arabic PDF report (`export_pdf.py`);
   `title_ar` defaults to the book PDF's filename stem if absent, and the
-  file gets written back to disk on every pipeline run so the user only
-  types it once per book. `commentator_ar` is the person doing the live
+  file gets written back to disk the moment any of its fields is edited
+  (every widget change reruns the script, and the script saves whenever
+  the live values differ from what's on disk) so the user only types it
+  once per book — an earlier version saved only on Run/Resume, which
+  silently discarded the values whenever the user filled them in and then
+  only rendered/exported without ever clicking Run. `commentator_ar` is the person doing the live
   commentary for the book (shown on the cover page as `علّق عليه: <name>`),
   distinct from `author_ar` (the book's own author) — both are plain text
   inputs the UI persists the same way. `page_offset` corrects for `align.py`/`extract_book.py`

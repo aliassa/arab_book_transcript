@@ -440,7 +440,20 @@ commentator_ar = st.text_input(
     help='Shown on the exported PDFs\' cover page as "علّق عليه: <name>" '
     "-- the person doing the live commentary for this book, not the book's author.",
 )
-st.caption("Saved to `book_info.json` in this book's folder once you run the pipeline.")
+st.caption("Saved to `book_info.json` in this book's folder as you edit.")
+
+# Persist edits immediately (Streamlit reruns the script on every widget
+# change, so this runs right after any field is edited) -- an earlier
+# version only saved on Run/Resume, which silently threw the values away
+# whenever the user filled them in and then only rendered a PDF, never
+# clicking Run before closing the app.
+if (
+    title_ar != book_info.get("title_ar", "")
+    or author_ar != book_info.get("author_ar", "")
+    or int(page_offset) != int(book_info.get("page_offset", 0))
+    or commentator_ar != book_info.get("commentator_ar", "")
+):
+    save_book_info(book_dir, title_ar, author_ar, int(page_offset), commentator_ar)
 
 session_dirs = list_session_dirs(book_dir)
 if not session_dirs:
@@ -546,8 +559,6 @@ if run:
     st.session_state.pop("annotated_bottom_bytes", None)
     st.session_state.pop("annotated_inserted_bytes", None)
 
-    save_book_info(book_dir, title_ar, author_ar, page_offset, commentator_ar)
-
     run_start = time.time()
 
     with st.status("Extracting book text...") as status:
@@ -619,8 +630,6 @@ if resume:
     st.session_state.pop("pdf_bytes", None)
     st.session_state.pop("annotated_bottom_bytes", None)
     st.session_state.pop("annotated_inserted_bytes", None)
-
-    save_book_info(book_dir, title_ar, author_ar, page_offset, commentator_ar)
 
     pages, _ = get_book_pages(pdf_path, saved_run.get("quality_threshold", quality_threshold))
     result = saved_run["transcript"]

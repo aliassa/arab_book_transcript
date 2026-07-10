@@ -16,6 +16,8 @@ from weasyprint import HTML
 CLUB_NAME_AR = "نادي القراء العرب"
 CLUB_TELEGRAM_URL = "https://t.me/NadiAlQuraaAlArab"
 CLUB_FACEBOOK_URL = "https://www.facebook.com/groups/1752014606211247/"
+TELEGRAM_LABEL_AR = "رابط تيليغرام"
+FACEBOOK_LABEL_AR = "رابط الفايسبوك"
 COMMENTATOR_LABEL_AR = "علّق عليه"
 
 # Sessions are numbered 1-10 in practice; anything beyond that falls back to
@@ -38,11 +40,12 @@ def session_label_ar(session_number: int | None) -> str:
     return f"المجلس {ordinal}" if ordinal else f"المجلس رقم {session_number}"
 
 
-def _social_icon_link(url: str, icon_bytes: bytes) -> str:
+def _social_icon_link(url: str, icon_bytes: bytes, label_ar: str) -> str:
     encoded = base64.b64encode(icon_bytes).decode("ascii")
     return (
         f'<a class="cover-social-link" href="{html.escape(url)}">'
         f'<img class="cover-social-icon" src="data:image/png;base64,{encoded}" alt="">'
+        f'<span class="cover-social-label">{html.escape(label_ar)}</span>'
         f"</a>"
     )
 
@@ -64,9 +67,9 @@ def cover_page_html(
     to match the book's own PDF). No session/majlis number here: this page
     fronts the whole book's worth of comments, not one session's, so a
     single session number wouldn't describe it. The Telegram/Facebook links
-    are icon-only (no visible URL text) -- the icon conveys which platform
-    it is, and the raw link still lives in the `<a href>` for anyone who
-    taps/clicks it, just not printed out as ugly plain-text URLs.
+    are icon + a short Arabic label ("رابط تيليغرام"/"رابط الفايسبوك") --
+    the raw URL lives only in the `<a href>` for anyone who taps/clicks it,
+    never printed out as ugly plain-text URLs.
     """
     image_html = ""
     if club_image_bytes:
@@ -86,9 +89,9 @@ def cover_page_html(
 
     social_links = []
     if telegram_icon_bytes:
-        social_links.append(_social_icon_link(CLUB_TELEGRAM_URL, telegram_icon_bytes))
+        social_links.append(_social_icon_link(CLUB_TELEGRAM_URL, telegram_icon_bytes, TELEGRAM_LABEL_AR))
     if facebook_icon_bytes:
-        social_links.append(_social_icon_link(CLUB_FACEBOOK_URL, facebook_icon_bytes))
+        social_links.append(_social_icon_link(CLUB_FACEBOOK_URL, facebook_icon_bytes, FACEBOOK_LABEL_AR))
     social_html = f'<div class="cover-social">{"".join(social_links)}</div>' if social_links else ""
 
     return f"""
@@ -214,15 +217,19 @@ def build_pdf(
       .meta {{ font-size: 9pt; color: #888; margin-bottom: 4pt; }}
       .context {{ font-size: 10pt; color: #999; font-style: italic; margin: 0 0 4pt; }}
       .text {{ font-size: 14pt; line-height: 1.9; margin: 0; }}
-      .cover-page-wrap {{ text-align: center; padding: 60pt 0 40pt; }}
-      .cover-title {{ font-size: 26pt; margin: 0 0 12pt; }}
+      .cover-page-wrap {{ text-align: center; padding: 50pt 0 40pt; }}
+      .cover-title {{ font-size: 32pt; margin: 0 0 14pt; }}
       {COVER_TITLE_CSS}
-      .cover-image {{ max-width: 55%; max-height: 240pt; margin: 0 auto 24pt; display: block; }}
-      .cover-meta {{ margin-bottom: 20pt; }}
-      .cover-meta-line {{ font-size: 14pt; color: #333; margin-bottom: 6pt; }}
-      .cover-social {{ display: flex; justify-content: center; gap: 22pt; margin-top: 10pt; }}
-      .cover-social-link {{ display: inline-block; text-decoration: none; }}
-      .cover-social-icon {{ width: 26pt; height: 26pt; display: block; }}
+      .cover-image {{ max-width: 70%; max-height: 320pt; margin: 0 auto 26pt; display: block; }}
+      .cover-meta {{ margin-bottom: 22pt; }}
+      .cover-meta-line {{ font-size: 17pt; color: #333; margin-bottom: 8pt; }}
+      .cover-social {{ display: flex; justify-content: center; gap: 26pt; margin-top: 12pt; }}
+      .cover-social-link {{
+        display: flex; align-items: center; gap: 7pt;
+        text-decoration: none; color: {COVER_GREEN};
+      }}
+      .cover-social-icon {{ width: 28pt; height: 28pt; display: block; }}
+      .cover-social-label {{ font-size: 13pt; font-weight: bold; white-space: nowrap; }}
     </style>
     </head>
     <body>

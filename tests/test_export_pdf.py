@@ -94,7 +94,10 @@ def test_cover_page_html_social_icons_link_out_without_showing_raw_urls():
     )
     assert 'href="https://t.me/NadiAlQuraaAlArab"' in body
     assert 'href="https://www.facebook.com/groups/1752014606211247/"' in body
-    # Icons only -- no plain-text URL printed next to them.
+    # Icon + Arabic label as the visible link text -- the raw URL is never
+    # printed, it only lives in the href.
+    assert "رابط تيليغرام" in body
+    assert "رابط الفايسبوك" in body
     assert "https://t.me/NadiAlQuraaAlArab<" not in body
     assert ">https://t.me" not in body
 

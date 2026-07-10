@@ -37,7 +37,7 @@ from pytesseract import Output
 from PIL import Image
 from weasyprint import HTML
 
-from export_pdf import COVER_TITLE_CSS, cover_page_html, format_ts, session_label_ar
+from export_pdf import COVER_GREEN, COVER_TITLE_CSS, cover_page_html, format_ts, session_label_ar
 
 FONT_FAMILY = "'Noto Naskh Arabic', serif"
 MARKER_COLOR = (0.75, 0.1, 0.1)
@@ -287,14 +287,18 @@ def _insert_cover_page(
         display: flex; align-items: center; justify-content: center;
       }}
       .cover-page {{ padding: 32pt; box-sizing: border-box; }}
-      .cover-title {{ font-size: 22pt; margin: 0 0 8pt; }}
+      .cover-title {{ font-size: 28pt; margin: 0 0 10pt; }}
       {COVER_TITLE_CSS}
-      .cover-image {{ max-width: 65%; max-height: 220pt; margin: 0 auto 20pt; display: block; }}
-      .cover-meta {{ margin-bottom: 18pt; }}
-      .cover-meta-line {{ font-size: 13pt; color: #333; margin-bottom: 6pt; }}
-      .cover-social {{ display: flex; justify-content: center; gap: 18pt; margin-top: 8pt; }}
-      .cover-social-link {{ display: inline-block; text-decoration: none; }}
-      .cover-social-icon {{ width: 22pt; height: 22pt; display: block; }}
+      .cover-image {{ max-width: 78%; max-height: 300pt; margin: 0 auto 22pt; display: block; }}
+      .cover-meta {{ margin-bottom: 20pt; }}
+      .cover-meta-line {{ font-size: 16pt; color: #333; margin-bottom: 7pt; }}
+      .cover-social {{ display: flex; justify-content: center; gap: 22pt; margin-top: 10pt; }}
+      .cover-social-link {{
+        display: flex; align-items: center; gap: 6pt;
+        text-decoration: none; color: {COVER_GREEN};
+      }}
+      .cover-social-icon {{ width: 26pt; height: 26pt; display: block; }}
+      .cover-social-label {{ font-size: 12pt; font-weight: bold; white-space: nowrap; }}
     </style>
     </head>
     <body>{body}</body>
