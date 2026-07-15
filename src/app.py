@@ -17,9 +17,12 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import anthropic
 import streamlit as st
 
 from align import extract_comments_from_transcript
+from correct_comments import MODEL as CORRECTION_MODEL
+from correct_comments import correct_text
 from export_annotated_pdf import build_annotated_pdf
 from export_pdf import build_pdf, session_label_ar
 from extract_book import extract_book
@@ -707,11 +710,79 @@ if "comments" in st.session_state:
             else:
                 st.metric("Actual time taken", format_duration(actual))
 
-    st.subheader(f"{len(comments)} candidate comment(s) — review below")
+    loaded_book = st.session_state["book_folder_name"]
+    loaded_session = st.session_state["session_number"]
+    st.subheader(f"Session {loaded_session} — {len(comments)} candidate comment(s) to review")
+    if (loaded_book, loaded_session) != (book_dir.name, session_number):
+        st.warning(
+            f"This list is still **{loaded_book} / session {loaded_session}** — "
+            "picking a session above doesn't load it by itself. Click "
+            "\"Resume saved run\" (or \"Run pipeline\") to review the selected "
+            f"session; edits below keep saving to session {loaded_session}."
+        )
     st.caption(
         "Listen to each clip, fix the text if the transcript got something "
         "wrong, and uncheck anything that isn't actually a comment."
     )
+
+    # AI cleanup runs *before* the per-comment widgets below are created:
+    # Streamlit rejects writes to a widget's session_state key after that
+    # widget is instantiated in the same run, so corrections are written
+    # into the text_{i} keys here and the widgets then render the fixed
+    # text. Only currently-kept comments are sent (unchecked ones are
+    # mostly disfluencies -- correcting them would spend tokens on text
+    # that's about to be discarded; re-check one and click again to
+    # include it).
+    ai_kept = [
+        i for i, c in enumerate(comments)
+        if st.session_state.get(f"keep_{i}", c["n_words"] >= DEFAULT_UNCHECKED_BELOW_WORDS)
+    ]
+    if st.button(
+        f"Fix obvious transcription errors with Claude ({len(ai_kept)} kept comment(s))",
+        disabled=not ai_kept,
+        help=f"Sends each kept comment's text to Claude ({CORRECTION_MODEL}) and "
+        "applies only very-high-confidence fixes: garbled Quran/hadith "
+        "quotes, misheard names and book titles, clearly misheard words. "
+        "Dialect and the speaker's own phrasing are left untouched, and "
+        "anything too garbled to reconstruct is left for review by ear. "
+        "Needs Anthropic API credentials (ANTHROPIC_API_KEY, or an "
+        "`ant auth login` profile) in the environment the app runs in.",
+    ):
+        try:
+            claude = anthropic.Anthropic()
+            n_changed = 0
+            with st.status(f"Correcting {len(ai_kept)} comment(s)...") as status:
+                for done, i in enumerate(ai_kept, start=1):
+                    current = st.session_state.get(f"text_{i}", comments[i]["text"])
+                    fixed = correct_text(current, client=claude)
+                    if fixed != current:
+                        st.session_state[f"text_{i}"] = fixed
+                        n_changed += 1
+                    status.update(
+                        label=f"Correcting comments... {done}/{len(ai_kept)} "
+                        f"checked, {n_changed} corrected"
+                    )
+                status.update(
+                    label=f"AI cleanup done — {n_changed} of {len(ai_kept)} kept "
+                    "comment(s) corrected (auto-saved with your review)",
+                    state="complete",
+                )
+        except anthropic.AuthenticationError:
+            st.error(
+                "No valid Anthropic API credentials. Export `ANTHROPIC_API_KEY` "
+                "(or run `ant auth login`) in the shell that starts "
+                "`streamlit run`, then restart the app."
+            )
+        except anthropic.APIConnectionError:
+            st.error(
+                "Could not reach the Anthropic API (network error). "
+                "Corrections applied so far were kept; click again to resume."
+            )
+        except anthropic.APIStatusError as e:
+            st.error(
+                f"Anthropic API error ({e.status_code}): {e.message} — "
+                "corrections applied so far were kept; click again to resume."
+            )
 
     font_col, size_col = st.columns(2)
     font_col.selectbox(
@@ -733,27 +804,31 @@ if "comments" in st.session_state:
             if c.get("context_before"):
                 st.caption(f"Text right before: …{c['context_before']}")
             st.audio(clips[i], format="audio/mp3")
+            # Seed defaults into session_state instead of passing value= to
+            # the widgets: resume pre-loads saved review edits into these
+            # same keys before the widgets exist, and a widget given both a
+            # value= default and a session-state value logs a "created with
+            # a default value but also had its value set" warning on every
+            # comment of every resume (the session-state value wins either
+            # way -- the warning is just noise, but per-comment noise).
+            if f"text_{i}" not in st.session_state:
+                st.session_state[f"text_{i}"] = c["text"]
+            if f"keep_{i}" not in st.session_state:
+                st.session_state[f"keep_{i}"] = c["n_words"] >= DEFAULT_UNCHECKED_BELOW_WORDS
             st.text_area(
                 "Comment text",
-                value=c["text"],
                 key=f"text_{i}",
                 height=100,
                 label_visibility="collapsed",
             )
-            st.checkbox(
-                "Keep as a comment",
-                value=c["n_words"] >= DEFAULT_UNCHECKED_BELOW_WORDS,
-                key=f"keep_{i}",
-            )
+            st.checkbox("Keep as a comment", key=f"keep_{i}")
 
     # Snapshot review progress on every rerun (i.e. every checkbox/text
     # edit above) so it survives a server restart same as the run itself --
     # keyed off session_state's own record of which session this is, not
     # the live dropdowns, so it can't get written to the wrong session's
     # folder if the user changes the dropdown without re-running/resuming.
-    saved_session_dir = (
-        DATA_DIR / st.session_state["book_folder_name"] / str(st.session_state["session_number"])
-    )
+    saved_session_dir = DATA_DIR / loaded_book / str(loaded_session)
     save_review_state(saved_session_dir, len(comments))
     n_keep = sum(1 for i in range(len(comments)) if st.session_state.get(f"keep_{i}", True))
     st.caption(f"Progress saved automatically · {n_keep}/{len(comments)} marked keep")
@@ -780,7 +855,27 @@ if "comments" in st.session_state:
     ]
     file_stem = f"{st.session_state.get('book_folder_name', 'book')}_majlis{st.session_state.get('session_number', '')}"
 
-    if st.button("Generate PDF report", type="primary"):
+    # Review choices already auto-save to the hidden .review_state.json on
+    # every checkbox/text change (see save_review_state above), and every
+    # export path reads them from there -- this button makes "I'm done
+    # reviewing" explicit: it snapshots the review one more time and writes
+    # the final kept+edited list to a visible JSON next to the session's
+    # audio, so the reviewed result is a real file the user can see, not
+    # just hidden widget-state snapshots. Page numbers in it carry the live
+    # page_offset, same as the comments.json download below.
+    if st.button(f"Finish review — save {len(reviewed)} kept comment(s)", type="primary"):
+        save_review_state(saved_session_dir, len(comments))
+        reviewed_path = saved_session_dir / "comments_reviewed.json"
+        reviewed_path.write_text(
+            json.dumps(reviewed, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        st.success(
+            f"Review saved: {len(reviewed)} kept of {len(comments)} candidate(s) → "
+            f"`{reviewed_path.relative_to(DATA_DIR.parent)}`. Every PDF export "
+            "(including the whole-book one below) uses exactly these kept comments."
+        )
+
+    if st.button("Generate PDF report"):
         st.session_state["pdf_bytes"] = build_pdf(
             reviewed,
             book_title_ar=st.session_state.get("book_title_ar", ""),
@@ -909,7 +1004,10 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
         "here from scratch. That can take a very long time for several "
         "un-processed long sessions -- transcription is CPU-only and is by "
         "far the slowest step (see the per-session time estimate above) -- "
-        "so this is meant to be started and left running, not waited on."
+        "so this is meant to be started and left running, not waited on. "
+        "Review edits (kept/unkept, text fixes) are re-read from disk each "
+        "time you click \"Generate PDF\", so reviewing more sessions after "
+        "processing only needs a re-click of Generate, not a re-process."
     )
     book_pdf_path = find_pdf(book_dir)
     book_session_dirs = list_session_dirs(book_dir)
@@ -963,6 +1061,17 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
 
             whole_col1, whole_col2 = st.columns(2)
             if whole_col1.button("Generate PDF (bottom of page)"):
+                # Re-read every session's saved run/review files at click
+                # time -- collection is just JSON reads (transcription is
+                # the only expensive part of processing), and this way
+                # review edits made since "Process all sessions" land in
+                # the PDF without needing a re-process click first.
+                raw_comments = load_reviewed_comments_for_book(book_dir, page_offset=0)
+                st.session_state["whole_book_comments"] = raw_comments
+                offset_comments = [
+                    {**c, "page": c["page"] + page_offset} if c.get("page") is not None else c
+                    for c in raw_comments
+                ]
                 with st.spinner(f"Rendering whole-book annotated PDF ({len(offset_comments)} comment(s))..."):
                     st.session_state["whole_book_bottom_bytes"] = build_annotated_pdf(
                         st.session_state["whole_book_pdf_path"],
@@ -992,6 +1101,14 @@ with st.expander("Whole-book annotated PDF (all sessions)"):
                 whole_col1.caption(f"Saved to `output/{book_dir.name}_annotated_bottom.pdf` and opened.")
 
             if whole_col2.button("Generate PDF (separate page)"):
+                # Same fresh re-read of review edits as the bottom-style
+                # button above.
+                raw_comments = load_reviewed_comments_for_book(book_dir, page_offset=0)
+                st.session_state["whole_book_comments"] = raw_comments
+                offset_comments = [
+                    {**c, "page": c["page"] + page_offset} if c.get("page") is not None else c
+                    for c in raw_comments
+                ]
                 with st.spinner(f"Rendering whole-book annotated PDF ({len(offset_comments)} comment(s))..."):
                     st.session_state["whole_book_inserted_bytes"] = build_annotated_pdf(
                         st.session_state["whole_book_pdf_path"],

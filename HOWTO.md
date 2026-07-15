@@ -51,6 +51,10 @@ for correctness, see the note on `book_pages_cache` below.
   `pip install weasyprint` succeeds without them and only fails later, at
   import time. Usually already present on a desktop install, missing on
   servers/containers.
+- *(optional)* An Anthropic API key, only for the UI's "Fix obvious
+  transcription errors with Claude" button: `export ANTHROPIC_API_KEY=...`
+  in the shell before `streamlit run`. Everything else works without it —
+  the button just shows an auth error if clicked with no key.
 
 ### Setting up from a fresh clone
 

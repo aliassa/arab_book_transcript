@@ -212,6 +212,24 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
    top of it (found by spot-checking a real generated whole-book PDF:
    a marker ended up overlapping the two words either side of it).
 
+7. **`correct_comments.py`** (UI-only) — AI cleanup of Whisper
+   mis-transcriptions: sends one comment's text per request to Claude
+   (`claude-opus-4-8`, adaptive thinking, streamed — a single comment can
+   be 10+ minutes of speech) with a system prompt that allows *only*
+   very-high-confidence fixes (garbled Quran/hadith quotes, misheard
+   names/book titles, clearly misheard fusha words) and explicitly
+   protects dialect, the speaker's own grammar, disfluencies, and
+   anything too garbled to reconstruct. Born from doing exactly this
+   pass by hand on session 1 of hosn_thann_billah (~70 fixes, all in
+   those categories). `acceptable_correction` is a sanity guard on the
+   reply: real fixes are word-for-word substitutions, so a word count
+   shifted more than ±20% means the model summarized/expanded/answered
+   with commentary — keep the original. Also keeps the original on any
+   non-`end_turn` stop reason (truncation, refusal). Auth comes from the
+   environment (`ANTHROPIC_API_KEY` or an `ant auth login` profile);
+   nothing is stored in the repo. Covered by `tests/` with a stubbed
+   client (no network).
+
 ### Known algorithmic limitations (not bugs — see `HOWTO.md`)
 
 - **Boundary fuzziness**: if the reader repeats a book line before/after a
@@ -308,7 +326,36 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
   session, a "Resume saved run" button appears next to "Run pipeline";
   resuming reloads the saved transcript/comments (skipping re-transcription
   and re-alignment entirely) plus any saved review edits, and only redoes
-  the cheap steps (page-cache lookup, audio clipping). `comments.json`/
+  the cheap steps (page-cache lookup, audio clipping). Changing the Session
+  dropdown alone loads nothing — the review list keeps showing whatever
+  run/resume last populated `st.session_state`, so the review header names
+  the loaded session and a warning appears whenever it differs from the
+  dropdown selection (edits keep saving to the *loaded* session's folder
+  either way, keyed off session_state, never the live dropdown). A
+  "Finish review" button under the review list makes "I'm done" explicit:
+  auto-save already covers durability, so all it adds is one more
+  review-state snapshot plus writing the final kept+edited list to a
+  visible `comments_reviewed.json` in the session folder (page_offset
+  applied, like the `comments.json` download) — an output artifact for the
+  user to see; the hidden state files remain what every export actually
+  reads. The review widgets seed their defaults by writing to
+  `st.session_state` before instantiation instead of passing `value=` —
+  this is load-bearing, not style: with `value=`, Streamlit silently
+  restores a still-registered widget's previous value after a
+  cross-session Resume (deleting the session_state key does NOT clear
+  widget-internal state), and the auto-save then writes the *previous*
+  session's texts into the newly loaded session's `.review_state.json`.
+  This actually corrupted session 5's review file with session 2's texts
+  (2026-07-10, caught and repaired); an API-seeded value wins over stale
+  widget state, which closes that leak — don't "simplify" back to
+  `value=`. A "Fix obvious transcription errors with Claude" button above the
+  comment list runs `correct_comments.correct_text` over the currently-kept
+  comments only (unchecked ones are mostly disfluencies about to be
+  discarded) — it must stay *above* the per-comment widgets in source
+  order, because it writes corrected text into the `text_{i}` widget keys
+  and Streamlit rejects writes to a widget's key after that widget is
+  instantiated in the same run; corrections then persist through the same
+  auto-save as manual edits. `comments.json`/
   `transcript.json`/`book_pages.json` are still separate, explicit
   downloads for taking results *out* of the tool — the two state files
   above are an internal safety net, not meant to be consumed directly.
@@ -347,7 +394,13 @@ transcription/alignment logic belongs in the stage module, not `app.py`.
     reason `st.session_state["comments"]` is (see above), so correcting
     "Page offset" afterward doesn't require re-processing, just
     re-rendering.
-  - **Generate PDF (bottom of page)/(separate page)**: apply the *live*
+  - **Generate PDF (bottom of page)/(separate page)**: re-read every
+    session's saved run/review files at click time
+    (`load_reviewed_comments_for_book` again — cheap JSON reads, unlike
+    processing) so review edits made *after* "Process all sessions" land
+    in the PDF without a re-process click (an earlier version rendered the
+    comment list collected at process time, which silently ignored any
+    later review changes), then apply the *live*
     page_offset to a copy of the collected raw comments and call
     `export_annotated_pdf.build_annotated_pdf` against the book-level PDF
     — comments from different sessions covering the same page interleave
